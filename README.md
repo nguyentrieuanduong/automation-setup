@@ -120,3 +120,9 @@
    ```shell
    ansible-playbook hello-world-playbook.yml
    ```
+
+3. [Creating Roles](https://galaxy.ansible.com/docs/contributing/creating_role.html)
+
+   ```shell
+   ansible-galaxy role init --init-path roles hello-world
+   ```
