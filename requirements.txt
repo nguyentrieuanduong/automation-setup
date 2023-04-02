@@ -1,0 +1,6 @@
+pip
+wheel
+setuptools
+ansible
+ansible-lint
+ansible-shell

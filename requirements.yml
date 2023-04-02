@@ -1,0 +1,42 @@
+---
+collections:
+  #- ansible.builtin
+  - community.general
+  - ansible.posix
+  - ansible.netcommon
+  - community.network
+  - ansible.utils
+  - ansible.windows
+  - community.windows
+  - community.crypto
+#  - community.mysql
+#  - community.postgresql
+  - community.docker
+#  - kubernetes.core
+#  - community.kubernetes
+#  - amazon.aws
+#  - community.aws
+#  - google.cloud
+#  - community.google
+#  - azure.azcollection
+#  - community.azure
+
+roles:
+  - ajsalminen.hosts
+  - geerlingguy.firewall
+  - geerlingguy.ntp
+  - yatesr.timezone
+  - jdauphant.ssl-certs
+  - willshersystems.sshd
+  - geerlingguy.java
+#  - ansiblebit.oracle-java
+  - geerlingguy.docker
+  - 0x0i.systemd
+  - geerlingguy.repo-epel
+#  - geerlingguy.homebrew
+  - geerlingguy.git
+  - ansistrano.deploy
+#  - geerlingguy.mysql
+#  - geerlingguy.postgresql
+#  - davidwittman.redis
+#  - riemers.gitlab-runner
