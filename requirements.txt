@@ -1,3 +1,4 @@
 ansible
+argcomplete
 ansible-lint
 ansible-shell
