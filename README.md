@@ -16,10 +16,14 @@
    source venv/bin/activate
    ```
 
-3. Upgrade pip, setuptools and wheel
+3. Upgrade pip, install setuptools and wheel
 
    ```shell
-   pip install --upgrade pip setuptools wheel
+   python3 -m pip install --upgrade pip
+   ```
+
+   ```shell
+   pip install -U setuptools wheel
    ```
 
 4. Installing
@@ -119,4 +123,10 @@
 
    ```shell
    ansible-playbook hello-world-playbook.yml
+   ```
+
+3. [Creating Roles](https://galaxy.ansible.com/docs/contributing/creating_role.html)
+
+   ```shell
+   ansible-galaxy role init --init-path roles hello-world
    ```

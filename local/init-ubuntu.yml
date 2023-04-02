@@ -1,0 +1,8 @@
+---
+# ansible-playbook local/init-ubuntu.yml -K
+- name: Install common ubuntu packages
+  hosts: localhost
+  roles:
+    - add-all-apt-repository
+  tags:
+    - ubuntu
