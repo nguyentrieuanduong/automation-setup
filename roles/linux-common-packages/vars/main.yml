@@ -1,0 +1,15 @@
+---
+packages:
+  - nano
+  - vim
+  - curl
+  - wget
+  - net-tools
+  - traceroute
+  - telnet
+  - ntp
+  - openssh-server
+  - openssh-client
+  - zip
+  - tar
+  - git

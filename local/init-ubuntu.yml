@@ -4,5 +4,6 @@
   hosts: localhost
   roles:
     - add-all-apt-repository
+    - linux-common-packages
   tags:
     - ubuntu
