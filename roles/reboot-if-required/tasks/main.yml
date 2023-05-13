@@ -1,0 +1,18 @@
+---
+- name: Check reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+    get_checksum: no
+  register: reboot_required_file
+  become: yes
+
+- name: Reboot if required
+  ansible.builtin.reboot:
+    msg: "Reboot required"
+    connect_timeout: 5
+    reboot_timeout: 300
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    test_command: uptime
+  when: reboot_if_required|bool and reboot_required_file.stat.exists
+  become: yes
