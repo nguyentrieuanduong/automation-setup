@@ -10,5 +10,7 @@
   become: yes
   become_user: root
   become_method: sudo
+  when: ansible_facts['os_family']|lower == 'debian'
   tags:
+    - debian
     - ubuntu
