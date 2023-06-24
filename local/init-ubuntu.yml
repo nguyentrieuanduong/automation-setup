@@ -1,12 +1,14 @@
 ---
 # Follow the README file to create, activate python virtual environment and install the required components
-# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python)
+# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python) -e add_all_apt_repo=no -e install_docker=no -e scala_version=""
 - name: Standalone init Ubuntu environment playbook
   vars:
     - target_hosts: localhost
     - ansible_connection: local
+    - add_all_apt_repo: no
     - apt_upgrade: yes
     - install_build_packages: yes
+    - scala_version: 2.12.18
     - install_docker: no
   hosts: "{{ target_hosts }}"
   connection: "{{ ansible_connection }}"
@@ -35,185 +37,253 @@
         cmd: dpkg --print-architecture
       register: deb_architecture
 
-    - name: Update OS
+    - name: Create temporary working directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: tmp
+      register: tmp_dir
+
+    - name: Setup
       block:
-        - name: Add all apt repositories
-          ansible.builtin.command:
-            cmd: "add-apt-repository -s -y {{ item }}"
-          with_items:
-            - main
-            - universe
-            - restricted
-            - multiverse
+        - name: Utility
+          block:
+            - name: Create some directory if it does not exist
+              ansible.builtin.file:
+                path: "~/{{ item }}"
+                state: directory
+                mode: '0755'
+              with_items:
+                - project
+                - programs
+                - tmp
 
-        - name: Performs an aptitude dist-upgrade
+            - name: Update Nautilus display textual path
+              ansible.builtin.command:
+                cmd: gsettings set org.gnome.nautilus.preferences always-use-location-entry true
+
+            - name: Update DNS servers
+              ansible.builtin.lineinfile:
+                path: /etc/resolv.conf
+                line: nameserver {{ item }}
+                state: present
+                insertafter: EOF
+                backup: no
+              with_items:
+                - 8.8.8.8
+                - 1.1.1.1
+                - 8.8.4.4
+                - 1.0.0.1
+              become: yes
+
+        - name: Update OS
+          block:
+            - name: Add all apt repositories
+              ansible.builtin.command:
+                cmd: "add-apt-repository -s -y {{ item }}"
+              with_items:
+                - main
+                - universe
+                - restricted
+                - multiverse
+              when: add_all_apt_repo|bool
+
+            - name: Performs an aptitude dist-upgrade
+              ansible.builtin.apt:
+                update_cache: yes
+                cache_valid_time: 3600
+                upgrade: dist
+                clean: true
+                autoclean: true
+                force_apt_get: yes
+              when: apt_upgrade|bool
+
+            - name: Check reboot is required
+              ansible.builtin.stat:
+                path: /var/run/reboot-required
+                get_checksum: no
+              register: reboot_required_file
+
+            - name: Reboot if required (kernel updated)
+              ansible.builtin.reboot:
+                msg: "Reboot required"
+                connect_timeout: 5
+                reboot_timeout: 300
+                pre_reboot_delay: 0
+                post_reboot_delay: 30
+                test_command: uptime
+              when: reboot_required_file.stat.exists
+          become: yes
+
+        - name: Install common packages
           ansible.builtin.apt:
-            update_cache: yes
-            cache_valid_time: 3600
-            upgrade: dist
-            clean: true
-            autoclean: true
-            force_apt_get: yes
-          when: apt_upgrade|bool
-
-        - name: Check reboot is required
-          ansible.builtin.stat:
-            path: /var/run/reboot-required
-            get_checksum: no
-          register: reboot_required_file
-
-        - name: Reboot if required (kernel updated)
-          ansible.builtin.reboot:
-            msg: "Reboot required"
-            connect_timeout: 5
-            reboot_timeout: 300
-            pre_reboot_delay: 0
-            post_reboot_delay: 30
-            test_command: uptime
-          when: reboot_required_file.stat.exists
-      become: yes
-
-    - name: Install common packages
-      ansible.builtin.apt:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - nano
-        - vim
-        - curl
-        - wget
-        - net-tools
-        - traceroute
-        - telnet
-        - ntp
-        - openssh-server
-        - openssh-client
-        - zip
-        - tar
-        - git
-        - software-properties-common
-        - ca-certificates
-        - gnupg
-      become: yes
-
-    - name: Install JDK
-      ansible.builtin.apt:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - openjdk-8-jdk
-        # - openjdk-11-jdk
-      become: yes
-
-    - name: Install Python and related components
-      block:
-        - name: Install Python
-          ansible.builtin.apt:
-            name: "{{ item }}"
+            name:
+              - nano
+              - vim
+              - curl
+              - wget
+              - net-tools
+              - traceroute
+              - telnet
+              - ntp
+              - openssh-server
+              - openssh-client
+              - zip
+              - tar
+              - git
+              - software-properties-common
+              - ca-certificates
+              - gnupg
             state: present
-          with_items:
-            - python3
-            - python3-venv
-            - python3-pip
-            - python3-setuptools
+          become: yes
 
-        - name: Build dependencies for python3
+        - name: Install JDK
           ansible.builtin.apt:
-            name: python3
-            state: build-dep
+            name:
+              - openjdk-8-jdk
+              - openjdk-11-jdk
+            state: present
+          become: yes
+
+        - name: Install Coursier and Scala
+          block:
+            - name: Download latest Coursier
+              ansible.builtin.get_url:
+                url: https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz
+                dest: "{{ tmp_dir.path }}"
+                mode: '0744'
+              register: downloaded_coursier_file
+
+            - name: Extract Coursier installation file
+              ansible.builtin.command:
+                cmd: "{{ item }}"
+                chdir: "{{ tmp_dir.path }}"
+              with_items:
+                - gzip -d {{ downloaded_coursier_file.dest }}
+                - mv cs-x86_64-pc-linux cs
+                - chmod 755 cs
+
+            - name: Setup Coursier and Scala
+              ansible.builtin.shell:
+                cmd: eval "$(./cs setup --env)"
+                chdir: "{{ tmp_dir.path }}"
+
+            - name: Install Scala {{ scala_version }}
+              ansible.builtin.shell:
+                cmd: cs install scala:{{ scala_version }} && cs install scalac:{{ scala_version }}
+                chdir: "{{ tmp_dir.path }}"
+          when: scala_version | length > 0
+
+        - name: Install Python and related components
+          block:
+            - name: Install Python
+              ansible.builtin.apt:
+                name:
+                  - python3
+                  - python3-venv
+                  - python3-pip
+                  - python3-setuptools
+                state: present
+
+            - name: Build dependencies for python3
+              ansible.builtin.apt:
+                name: python3
+                state: build-dep
+              when: install_build_packages|bool
+
+            - name: Install packages for optional modules for building python3
+              ansible.builtin.apt:
+                name:
+                  - pkg-config
+                  - build-essential
+                  - gdb
+                  - lcov
+                  - pkg-config
+                  - libbz2-dev
+                  - libffi-dev
+                  - libgdbm-dev
+                  - libgdbm-compat-dev
+                  - liblzma-dev
+                  - libncurses5-dev
+                  - libreadline6-dev
+                  - libsqlite3-dev
+                  - libssl-dev
+                  - lzma
+                  - lzma-dev
+                  - tk-dev
+                  - uuid-dev
+                  - zlib1g-dev
+                state: present
+              when: install_build_packages|bool
+          become: yes
+
+        - name: Install packages for building git
+          ansible.builtin.apt:
+            name:
+              - dh-autoreconf
+              - libcurl4-gnutls-dev
+              - libexpat1-dev
+              - gettext
+              - libz-dev
+              - libssl-dev
+              - asciidoc
+              - xmlto
+              - docbook2x
+              - install-info
+            state: present
           when: install_build_packages|bool
+          become: yes
 
-        - name: Install packages for optional modules for building python3
-          ansible.builtin.apt:
-            name: "{{ item }}"
-            state: present
-          with_items:
-            - pkg-config
-            - build-essential
-            - gdb
-            - lcov
-            - pkg-config
-            - libbz2-dev
-            - libffi-dev
-            - libgdbm-dev
-            - libgdbm-compat-dev
-            - liblzma-dev
-            - libncurses5-dev
-            - libreadline6-dev
-            - libsqlite3-dev
-            - libssl-dev
-            - lzma
-            - lzma-dev
-            - tk-dev
-            - uuid-dev
-            - zlib1g-dev
-          when: install_build_packages|bool
-      become: yes
+        - name: Install Docker
+          block:
+            - name: Set docker keyring file path
+              ansible.builtin.set_fact:
+                docker_keyring_file: /etc/apt/keyrings/docker.gpg
 
-    - name: Install packages for building git
-      ansible.builtin.apt:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - dh-autoreconf
-        - libcurl4-gnutls-dev
-        - libexpat1-dev
-        - gettext
-        - libz-dev
-        - libssl-dev
-        - asciidoc
-        - xmlto
-        - docbook2x
-        - install-info
-      when: install_build_packages|bool
-      become: yes
+            - name: Setup Docker’s official GPG key
+              ansible.builtin.apt_key:
+                url: https://download.docker.com/linux/ubuntu/gpg
+                keyring: "{{ docker_keyring_file }}"
+                state: present
 
-    - name: Update Nautilus display textual path
-      ansible.builtin.command:
-        cmd: gsettings set org.gnome.nautilus.preferences always-use-location-entry true
+            - name: Setup Docker Repository
+              ansible.builtin.apt_repository:
+                repo: "deb [arch={{ deb_architecture.stdout }} signed-by={{ docker_keyring_file }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+                state: present
 
-    - name: Update DNS servers
-      ansible.builtin.lineinfile:
-        path: /etc/resolv.conf
-        line: nameserver {{ item }}
-        state: present
-        insertafter: EOF
-        backup: no
-      with_items:
-        - 8.8.8.8
-        - 1.1.1.1
-        - 8.8.4.4
-        - 1.0.0.1
-      become: yes
+            - name: Install Docker Engine
+              ansible.builtin.apt:
+                name:
+                  - docker-ce
+                  - docker-ce-cli
+                  - containerd.io
+                  - docker-buildx-plugin
+                  - docker-compose-plugin
+                state: present
+                update_cache: true
+                force_apt_get: yes
+          when: install_docker|bool
+          become: yes
 
-    - name: Install Docker
-      block:
-        - name: Set docker keyring file path
-          ansible.builtin.set_fact:
-            docker_keyring_file: /etc/apt/keyrings/docker.gpg
+        - name: Install IBus Bamboo
+          block:
+            - name: Add IBus Bamboo stable repository from PPA and install its signing key on Ubuntu target
+              ansible.builtin.apt_repository:
+                repo: ppa:bamboo-engine/ibus-bamboo
+                state: present
+                update_cache: true
 
-        - name: Setup Docker’s official GPG key
-          ansible.builtin.apt_key:
-            url: https://download.docker.com/linux/ubuntu/gpg
-            keyring: "{{ docker_keyring_file }}"
-            state: present
-
-        - name: Setup Docker Repository
-          ansible.builtin.apt_repository:
-            repo: "deb [arch={{ deb_architecture.stdout }} signed-by={{ docker_keyring_file }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-            state: present
-
-        - name: Install Docker Engine
-          ansible.builtin.apt:
-            name: "{{ item }}"
-            state: present
-            update_cache: true
-            force_apt_get: yes
-          with_items:
-            - docker-ce
-            - docker-ce-cli
-            - containerd.io
-            - docker-buildx-plugin
-            - docker-compose-plugin
-      when: install_docker|bool
-      become: yes
+            - name: Install IBus Bamboo
+              ansible.builtin.apt:
+                name:
+                  - ibus
+                  - ibus-bamboo
+                state: present
+                update_cache: true
+                force_apt_get: yes
+          become: yes
+      always:
+        - name: Cleanup
+          ansible.builtin.file:
+            path: "{{ tmp_dir.path }}"
+            state: absent
+          when: tmp_dir.path is defined
