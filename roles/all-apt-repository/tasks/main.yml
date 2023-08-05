@@ -1,0 +1,16 @@
+---
+- name: Add all apt repository
+  ansible.builtin.command:
+    cmd: "add-apt-repository -s -y {{ item }}"
+  with_items:
+    - main
+    - universe
+    - restricted
+    - multiverse
+  become: yes
+  become_user: root
+  become_method: sudo
+  when: ansible_facts['os_family']|lower == 'debian'
+  tags:
+    - debian
+    - ubuntu
