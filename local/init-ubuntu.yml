@@ -5,6 +5,7 @@
   vars:
     - target_hosts: localhost
     - ansible_connection: local
+    - is_desktop: no
     - add_all_apt_repo: no
     - apt_upgrade: yes
     - install_build_packages: yes
@@ -30,7 +31,7 @@
     - name: Skip (not fail) if OS is Debian
       ansible.builtin.fail:
         msg: ERROR! OS family is not Debian
-      when: ansible_facts['os_family']|lower != 'debian'
+      when: "{{ ansible_facts['os_family']|lower != 'debian' }}"
 
     - name: Get deb architecture
       ansible.builtin.command:
@@ -60,6 +61,7 @@
             - name: Update Nautilus display textual path
               ansible.builtin.command:
                 cmd: gsettings set org.gnome.nautilus.preferences always-use-location-entry true
+              when: is_desktop|bool
 
             - name: Update DNS servers
               ansible.builtin.lineinfile:
@@ -133,14 +135,17 @@
               - software-properties-common
               - ca-certificates
               - gnupg
+              - apt-transport-https
+              - lsb-release
             state: present
           become: yes
 
         - name: Install JDK
           ansible.builtin.apt:
             name:
-              - openjdk-8-jdk
-              - openjdk-11-jdk
+#              - openjdk-8-jdk
+#              - openjdk-11-jdk
+              - openjdk-17-jdk
             state: present
           become: yes
 
@@ -248,6 +253,7 @@
             - name: Setup Docker Repository
               ansible.builtin.apt_repository:
                 repo: "deb [arch={{ deb_architecture.stdout }} signed-by={{ docker_keyring_file }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+                filename: docker
                 state: present
 
             - name: Install Docker Engine
@@ -280,6 +286,7 @@
                 state: present
                 update_cache: true
                 force_apt_get: yes
+          when: is_desktop|bool
           become: yes
       always:
         - name: Cleanup
