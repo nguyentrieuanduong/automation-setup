@@ -1,15 +1,17 @@
 ---
 # Follow the README file to create, activate python virtual environment and install the required components
-# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python) -e add_all_apt_repo=no -e install_docker=no -e scala_version=""
+# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python) -e "is_desktop=no add_all_apt_repo=yes apt_upgrade=yes install_sdk=yes nodejs_major_version=18 install_docker=no" -e '{"openjdk_versions":[8,11,17],"scala_versions":["2.12.18"]}'
 - name: Standalone init Ubuntu environment playbook
   vars:
     - target_hosts: localhost
     - ansible_connection: local
     - is_desktop: no
     - add_all_apt_repo: no
-    - apt_upgrade: yes
-    - install_build_packages: yes
-    - scala_version: 2.12.18
+    - apt_upgrade: no
+    - install_sdk: no
+    - openjdk_versions: []
+    - scala_versions: []
+    - nodejs_major_version: ""
     - install_docker: no
   hosts: "{{ target_hosts }}"
   connection: "{{ ansible_connection }}"
@@ -31,7 +33,7 @@
     - name: Skip (not fail) if OS is Debian
       ansible.builtin.fail:
         msg: ERROR! OS family is not Debian
-      when: "{{ ansible_facts['os_family']|lower != 'debian' }}"
+      when: ansible_facts['os_family']|lower != 'debian'
 
     - name: Get deb architecture
       ansible.builtin.command:
@@ -53,7 +55,7 @@
                 path: "~/{{ item }}"
                 state: directory
                 mode: '0755'
-              with_items:
+              loop:
                 - projects
                 - programs
                 - tmp
@@ -70,7 +72,7 @@
                 state: present
                 insertafter: EOF
                 backup: no
-              with_items:
+              loop:
                 - 8.8.8.8
                 - 1.1.1.1
                 - 8.8.4.4
@@ -82,7 +84,7 @@
             - name: Add all apt repositories
               ansible.builtin.command:
                 cmd: "add-apt-repository -s -y {{ item }}"
-              with_items:
+              loop:
                 - main
                 - universe
                 - restricted
@@ -143,10 +145,9 @@
         - name: Install JDK
           ansible.builtin.apt:
             name:
-#              - openjdk-8-jdk
-#              - openjdk-11-jdk
-              - openjdk-17-jdk
+              - "openjdk-{{ item }}-jdk"
             state: present
+          loop: "{{ openjdk_versions }}"
           become: yes
 
         - name: Install Coursier and Scala
@@ -162,7 +163,7 @@
               ansible.builtin.command:
                 cmd: "{{ item }}"
                 chdir: "{{ tmp_dir.path }}"
-              with_items:
+              loop:
                 - gzip -d {{ downloaded_coursier_file.dest }}
                 - mv cs-x86_64-pc-linux cs
                 - chmod 755 cs
@@ -172,11 +173,12 @@
                 cmd: eval "$(./cs setup --env)"
                 chdir: "{{ tmp_dir.path }}"
 
-            - name: Install Scala {{ scala_version }}
+            - name: Install Scala {{ scala_versions }}
               ansible.builtin.shell:
-                cmd: cs install scala:{{ scala_version }} && cs install scalac:{{ scala_version }}
+                cmd: cs install scala:{{ item }} && cs install scalac:{{ item }}
                 chdir: "{{ tmp_dir.path }}"
-          when: scala_version | length > 0
+              loop: "{{ scala_versions }}"
+          when: scala_versions | length > 0
 
         - name: Install Python and related components
           block:
@@ -193,7 +195,6 @@
               ansible.builtin.apt:
                 name: python3
                 state: build-dep
-              when: install_build_packages|bool
 
             - name: Install packages for optional modules for building python3
               ansible.builtin.apt:
@@ -218,7 +219,7 @@
                   - uuid-dev
                   - zlib1g-dev
                 state: present
-              when: install_build_packages|bool
+          when: install_sdk|bool
           become: yes
 
         - name: Install packages for building git
@@ -235,7 +236,34 @@
               - docbook2x
               - install-info
             state: present
-          when: install_build_packages|bool
+          when: install_sdk|bool
+          become: yes
+
+        - name: Install Node.js
+          block:
+            - name: Set NodeSource keyring file path
+              ansible.builtin.set_fact:
+                nodesource_keyring_file: /etc/apt/keyrings/nodesource.gpg
+
+            - name: Setup NodeSource’s official GPG key
+              ansible.builtin.apt_key:
+                url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+                keyring: "{{ nodesource_keyring_file }}"
+                state: present
+
+            - name: Setup NodeSource Repository
+              ansible.builtin.apt_repository:
+                repo: "deb [signed-by={{ nodesource_keyring_file }}] https://deb.nodesource.com/node_{{ nodejs_major_version }}.x nodistro main"
+                filename: nodesource
+                state: present
+
+            - name: Install Node.js
+              ansible.builtin.apt:
+                name: nodejs
+                state: present
+                update_cache: true
+                force_apt_get: yes
+          when: nodejs_major_version | length > 0
           become: yes
 
         - name: Install Docker
