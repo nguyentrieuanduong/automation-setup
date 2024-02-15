@@ -1,6 +1,6 @@
 ---
 # Follow the README file to create, activate python virtual environment and install the required components
-# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python) -e "is_desktop=no add_all_apt_repo=yes apt_upgrade=yes install_sdk=yes nodejs_major_version=18 install_docker=no" -e '{"openjdk_versions":[8,11,17],"scala_versions":["2.12.18"]}'
+# ansible-playbook local/init-ubuntu.yml -K -e ansible_python_interpreter=$(which python) -e "is_desktop=no add_all_apt_repo=yes apt_upgrade=yes install_sdk=yes nodejs_major_version=18 install_docker=no install_kubectl=no install_helm=no" -e '{"openjdk_versions":[8,11,17],"scala_versions":["2.12.18"]}'
 - name: Standalone init Ubuntu environment playbook
   vars:
     - target_hosts: localhost
@@ -13,13 +13,14 @@
     - scala_versions: []
     - nodejs_major_version: ""
     - install_docker: no
+    - install_kubectl: no
+    - install_helm: no
   hosts: "{{ target_hosts }}"
   connection: "{{ ansible_connection }}"
   gather_facts: true
   become_user: root
   become_method: sudo
   tags:
-    - debian
     - ubuntu
 
   tasks:
@@ -79,6 +80,30 @@
                 - 1.0.0.1
               become: yes
 
+        - name: Install common packages
+          ansible.builtin.apt:
+            name:
+              - software-properties-common
+              - ca-certificates
+              - nano
+              - vim
+              - curl
+              - wget
+              - net-tools
+              - traceroute
+              - telnet
+              - ntp
+              - openssh-server
+              - openssh-client
+              - zip
+              - tar
+              - git
+              - gnupg
+              - apt-transport-https
+              - lsb-release
+            state: present
+          become: yes
+
         - name: Update OS
           block:
             - name: Add all apt repositories
@@ -118,30 +143,6 @@
               when: reboot_required_file.stat.exists
           become: yes
 
-        - name: Install common packages
-          ansible.builtin.apt:
-            name:
-              - nano
-              - vim
-              - curl
-              - wget
-              - net-tools
-              - traceroute
-              - telnet
-              - ntp
-              - openssh-server
-              - openssh-client
-              - zip
-              - tar
-              - git
-              - software-properties-common
-              - ca-certificates
-              - gnupg
-              - apt-transport-https
-              - lsb-release
-            state: present
-          become: yes
-
         - name: Install JDK
           ansible.builtin.apt:
             name:
@@ -154,7 +155,7 @@
           block:
             - name: Download latest Coursier
               ansible.builtin.get_url:
-                url: https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz
+                url: https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz
                 dest: "{{ tmp_dir.path }}"
                 mode: '0744'
               register: downloaded_coursier_file
@@ -295,7 +296,69 @@
                 state: present
                 update_cache: true
                 force_apt_get: yes
+
+            - name: Add local user to docker group
+              ansible.builtin.user:
+                name: "{{ lookup('env', 'USER') }}"
+                groups: docker
+                append: true
           when: install_docker|bool
+          become: yes
+
+        - name: Install kubectl
+          block:
+            - name: Set Kubernetes package repositories keyring file path
+              ansible.builtin.set_fact:
+                k8s_keyring_file: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+            - name: Setup Kubernetes package repositories’s official GPG key
+              ansible.builtin.apt_key:
+                url: https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key
+                keyring: "{{ k8s_keyring_file }}"
+                state: present
+
+            - name: Setup Kubernetes package repository
+              ansible.builtin.apt_repository:
+                repo: "deb [signed-by={{ k8s_keyring_file }}] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /"
+                filename: kubernetes
+                state: present
+
+            - name: Install kubectl 
+              ansible.builtin.apt:
+                name:
+                  - kubectl
+                state: present
+                update_cache: true
+                force_apt_get: yes
+          when: install_kubectl|bool
+          become: yes
+
+        - name: Install Helm
+          block:
+            - name: Set helm keyring file path
+              ansible.builtin.set_fact:
+                helm_keyring_file: /usr/share/keyrings/helm.gpg
+
+            - name: Setup Helm official GPG key
+              ansible.builtin.apt_key:
+                url: https://baltocdn.com/helm/signing.asc
+                keyring: "{{ helm_keyring_file }}"
+                state: present
+
+            - name: Setup Helm Repository
+              ansible.builtin.apt_repository:
+                repo: "deb [arch={{ deb_architecture.stdout }} signed-by={{ helm_keyring_file }}] https://baltocdn.com/helm/stable/debian/ all main"
+                filename: helm-stable-debian
+                state: present
+
+            - name: Install Helm
+              ansible.builtin.apt:
+                name:
+                  - helm
+                state: present
+                update_cache: true
+                force_apt_get: yes
+          when: install_helm|bool
           become: yes
 
         - name: Install IBus Bamboo
