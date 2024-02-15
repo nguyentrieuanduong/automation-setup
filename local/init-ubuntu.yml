@@ -61,6 +61,15 @@
                 - programs
                 - tmp
 
+            - name: Create keyring directory if it does not exist
+              ansible.builtin.file:
+                path: /etc/apt/keyrings
+                state: directory
+                owner: root
+                group: root
+                mode: '0755'
+              become: yes
+
             - name: Update Nautilus display textual path
               ansible.builtin.command:
                 cmd: gsettings set org.gnome.nautilus.preferences always-use-location-entry true
