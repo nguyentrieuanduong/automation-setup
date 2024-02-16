@@ -116,7 +116,7 @@ brew analytics off
         cs setup
         ```
     
-    2. Install [Scala](https://www.scala-lang.org/download/):
+    2. Install [Scala](https://www.scala-lang.org/):
     
         ```shell
         cs install scala:2.12.18 && cs install scalac:2.12.18
@@ -175,6 +175,18 @@ brew analytics off
 
     ```shell
     brew install k3d
+    ```
+
+11. Install [kubectl](https://kubernetes.io/docs/reference/kubectl/):
+
+    ```shell
+    brew install kubectl
+    ```
+
+12. Install [Helm](https://helm.sh/):
+
+    ```shell
+    brew install helm
     ```
 
 ---
