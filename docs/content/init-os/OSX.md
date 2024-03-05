@@ -205,50 +205,60 @@ brew analytics off
 
 ###### App Store based
 
-1. [iStat Menus](https://apps.apple.com/vn/app/istat-menus/id1319778037) with [iStat Menus Helper](https://cdn.bjango.com/files/istatmenushelper/istatmenushelper2.0.zip) (Download suggested from application)
+- [Keka](https://apps.apple.com/vn/app/keka/id470158793)
 
-2. [Amphetamine](https://apps.apple.com/vn/app/amphetamine/id937984704) with [Amphetamine Enhancer](https://github.com/x74353/Amphetamine-Enhancer/raw/master/Releases/Current/Amphetamine%20Enhancer.dmg) (Download suggested from application)
+- [Folx GO+](https://apps.apple.com/vn/app/folx-go/id823528286)
 
-3. [Magnet](https://apps.apple.com/vn/app/magnet/id441258766)
+- [Amphetamine](https://apps.apple.com/vn/app/amphetamine/id937984704) with [Amphetamine Enhancer](https://github.com/x74353/Amphetamine-Enhancer/raw/master/Releases/Current/Amphetamine%20Enhancer.dmg) (Download suggested from application)
 
-4. [Keka](https://apps.apple.com/vn/app/keka/id470158793?mt=12)
+- [iStat Menus](https://apps.apple.com/vn/app/istat-menus/id1319778037) with [iStat Menus Helper](https://cdn.bjango.com/files/istatmenushelper/istatmenushelper2.0.zip) (Download suggested from application)
 
-5. [Lich van nien](https://apps.apple.com/vn/app/l%E1%BB%8Bch-v%E1%BA%A1n-ni%C3%AAn-%C3%A2m-l%E1%BB%8Bch-vn/id1463023539)
+- [Magnet](https://apps.apple.com/vn/app/magnet/id441258766)
 
-6. [Microsoft Word](https://apps.apple.com/vn/app/microsoft-word/id462054704)
+- [Lich van nien](https://apps.apple.com/vn/app/l%E1%BB%8Bch-v%E1%BA%A1n-ni%C3%AAn-%C3%A2m-l%E1%BB%8Bch-vn/id1463023539)
 
-7. [Microsoft Excel](https://apps.apple.com/vn/app/microsoft-excel/id462058435)
+- [Microsoft Word](https://apps.apple.com/vn/app/microsoft-word/id462054704)
 
-8. [Microsoft PowerPoint](https://apps.apple.com/vn/app/microsoft-powerpoint/id462062816)
+- [Microsoft Excel](https://apps.apple.com/vn/app/microsoft-excel/id462058435)
 
-9. [Microsoft OneNote](https://apps.apple.com/vn/app/microsoft-onenote/id784801555)
+- [Microsoft PowerPoint](https://apps.apple.com/vn/app/microsoft-powerpoint/id462062816)
 
-10. [OneDrive](https://apps.apple.com/vn/app/onedrive/id823766827)
+- [Microsoft OneNote](https://apps.apple.com/vn/app/microsoft-onenote/id784801555)
 
-11. [Microsoft Remote Desktop](https://apps.apple.com/vn/app/microsoft-remote-desktop/id1295203466)
+- [OneDrive](https://apps.apple.com/vn/app/onedrive/id823766827)
 
-12. [Jump Desktop](https://apps.apple.com/vn/app/jump-desktop-rdp-vnc-fluid/id524141863)
+- [Microsoft Remote Desktop](https://apps.apple.com/vn/app/microsoft-remote-desktop/id1295203466)
 
-13. [Maccy](https://apps.apple.com/vn/app/maccy/id1527619437)
+- [Jump Desktop](https://apps.apple.com/vn/app/jump-desktop-rdp-vnc-fluid/id524141863)
 
-14. [UTM Virtual Machine](https://apps.apple.com/vn/app/utm-virtual-machines/id1538878817)
+- [Maccy](https://apps.apple.com/vn/app/maccy/id1527619437)
 
-15. [Final Cut Pro](https://apps.apple.com/vn/app/final-cut-pro/id424389933)
+- [UTM Virtual Machine](https://apps.apple.com/vn/app/utm-virtual-machines/id1538878817)
+
+- [Presentify - Screen Annotation](https://apps.apple.com/vn/app/presentify-screen-annotation/id1507246666)
+
+- [Photomator](https://apps.apple.com/vn/app/photomator/id1444636541)
+
+- [Pixelmator Pro](https://apps.apple.com/vn/app/pixelmator-pro/id1289583905)
+
+- [Final Cut Pro](https://apps.apple.com/vn/app/final-cut-pro/id424389933)
+
+- [DaVinci Resolve Studio](https://apps.apple.com/vn/app/davinci-resolve-studio/id900392332)
 
 ###### Manually download and install
 
-1. [Adguard](https://adguard.com/en/adguard-mac/overview.html)
+- [Adguard](https://adguard.com/en/adguard-mac/overview.html)
 
-2. [Bartender](https://www.macbartender.com/)
+- [Bartender](https://www.macbartender.com/)
 
-3. [FileZilla](https://filezilla-project.org/download.php?platform=osx)
+- [FileZilla](https://filezilla-project.org/download.php?platform=osx)
 
-4. [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-5. [VSCode](https://code.visualstudio.com/download)
+- [VSCode](https://code.visualstudio.com/download)
 
-6. [Parallels Desktop](https://www.parallels.com/products/desktop/)
+- [Parallels Desktop](https://www.parallels.com/products/desktop/)
 
-7. [VMWare Fusion](https://download3.vmware.com/software/FUS-1302/VMware-Fusion-13.0.2-21581413_universal.dmg)
+- [VMWare Fusion](https://download3.vmware.com/software/FUS-1302/VMware-Fusion-13.0.2-21581413_universal.dmg)
 
-8. [XMind 8](https://dl3.xmind.net/xmind-8-update9-macosx.dmg) with (optional) [template](https://xmind.app/blog/mind-map-presentation-template/)
+- [XMind 8](https://dl3.xmind.net/xmind-8-update9-macosx.dmg) with (optional) [template](https://xmind.app/blog/mind-map-presentation-template/)
