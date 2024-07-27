@@ -48,19 +48,19 @@ brew analytics off
 
 ###### Install software by Homebrew
 
-1. Install [iTerm 2](https://iterm2.com/):
+- Install [iTerm 2](https://iterm2.com/):
 
     ```shell
     brew install --cask iterm2
     ```
 
-2. Install [Python build dependencies](https://devguide.python.org/getting-started/setup-building/#macos):
+- Install [Python build dependencies](https://devguide.python.org/getting-started/setup-building/#macos):
 
     ```shell
     brew install pkg-config openssl@3.0 xz gdbm tcl-tk
     ```
 
-3. Install Java Development Kit (JDK)
+- Install Java Development Kit (JDK)
 
     Search for available JDK version:
 
@@ -107,7 +107,7 @@ brew analytics off
     echo 'export PATH=$PATH:$JAVA_HOME/bin' >> ~/.zprofile
     ```
 
-4. Install [Coursier](https://get-coursier.io/) and [Scala](https://www.scala-lang.org/):
+- Install [Coursier](https://get-coursier.io/) and [Scala](https://www.scala-lang.org/):
 
     1. Install [Coursier](https://get-coursier.io/docs/cli-installation):
 
@@ -122,7 +122,7 @@ brew analytics off
         cs install scala:2.12.18 && cs install scalac:2.12.18
         ```
 
-5. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/):
+- Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/):
 
     ```shell
     brew install --cask miniconda
@@ -147,43 +147,43 @@ brew analytics off
     conda config --set auto_activate_base false
     ```
 
-6. Install [NodeJS](https://nodejs.org/):
+- Install [NodeJS](https://nodejs.org/):
 
     ```shell
     brew install node
     ```
 
-7. Install [Intellij](https://www.jetbrains.com/idea/):
+- Install [Intellij](https://www.jetbrains.com/idea/):
 
     ```shell
     brew install --cask intellij-idea-ce
     ```
 
-8. Install [PyCharm](https://www.jetbrains.com/pycharm/):
+- Install [PyCharm](https://www.jetbrains.com/pycharm/):
 
     ```shell
     brew install --cask pycharm-ce
     ```
 
-9. Install [Dbeaver](https://dbeaver.io/):
+- Install [Dbeaver](https://dbeaver.io/):
 
     ```shell
     brew install --cask dbeaver-community
     ```
 
-10. Install [k3d](https://k3d.io/):
+- Install [k3d](https://k3d.io/):
 
     ```shell
     brew install k3d
     ```
 
-11. Install [kubectl](https://kubernetes.io/docs/reference/kubectl/):
+- Install [kubectl](https://kubernetes.io/docs/reference/kubectl/):
 
     ```shell
     brew install kubectl
     ```
 
-12. Install [Helm](https://helm.sh/):
+- Install [Helm](https://helm.sh/):
 
     ```shell
     brew install helm
@@ -195,15 +195,26 @@ brew analytics off
 
 ##### Command line based
 
-1. Install [Rust](https://www.rust-lang.org/):
+- Install [Rust](https://www.rust-lang.org/):
 
     ```shell
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     ```
 
+###### pyvenv based
+
+- Install [JupyterLab](https://jupyterlab.readthedocs.io/en/latest/getting_started/installation.html#pip):
+
+    ```shell
+    # source .venv/bin/active
+    pip install jupyterlab
+    ```
+
 ##### UI installation based
 
 ###### App Store based
+
+- [ShellFish](https://apps.apple.com/vn/app/ssh-files-secure-shellfish/id1336634154)
 
 - [Keka](https://apps.apple.com/vn/app/keka/id470158793)
 
