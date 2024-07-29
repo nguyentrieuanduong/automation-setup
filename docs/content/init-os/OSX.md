@@ -262,6 +262,8 @@ brew analytics off
 
 - [Bartender](https://www.macbartender.com/)
 
+- [NotchNook](https://lo.cafe/notchnook)
+
 - [FileZilla](https://filezilla-project.org/download.php?platform=osx)
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
