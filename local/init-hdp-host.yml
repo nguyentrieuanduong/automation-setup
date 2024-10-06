@@ -1,0 +1,899 @@
+---
+# Follow the README file to create, activate python virtual environment and install the required components
+# sudo yum install -y python3
+# mkdir ~/tmp; cd ~/tmp; python3 -m venv .venv; source .venv/bin/activate
+# pip install -U pip setuptools wheel
+# pip install ansible pexpect PyMySQL lxml
+# ansible-galaxy collection install community.general ansible.posix community.mysql
+# ansible-playbook local/init-hdp-host.yml -e ansible_python_interpreter=$(which python) -e "yum_upgrade=no install_sdk=no" -e '{"hdp_hostname":"localhost.localdomain","single_node":true}'
+- name: Standalone init HDP host playbook
+  vars:
+    - target_hosts: localhost
+    - ansible_connection: local
+    - yum_upgrade: no
+    - install_sdk: no
+    - hdp_hostname: "localhost"
+    - single_node: true
+    - mysqldb_rootpw: "admin"
+    - ambaripw: "ambari"
+    - hivepw: "hive"
+    - openjdk_versions: [8]
+    - nodejs_major_version: ""
+    - install_docker: no
+    - hdp_instalation_files:
+        ambari: "~/ambari-2.7.4.0-centos7.tar.gz"
+        hdp: "~/HDP-3.1.4.0-centos7-rpm.tar.gz"
+        hdp_utils: "~/HDP-UTILS-1.1.0.22-centos7.tar.gz"
+        hdp_gpl: "~/HDP-GPL-3.1.4.0-centos7-gpl.tar.gz"
+  hosts: "{{ target_hosts }}"
+  connection: "{{ ansible_connection }}"
+  gather_facts: true
+  become_user: root
+  become_method: sudo
+  tags:
+    - centos7.5
+
+  tasks:
+    - name: Start
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts }}"
+      tags:
+        - never
+        - debug
+
+    - name: Skip (not fail) if OS is Debian
+      ansible.builtin.fail:
+        msg: ERROR! OS family is not Debian
+      when: ansible_facts['os_family']|lower != 'redhat'
+
+    - name: Create temporary working directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: tmp
+      register: tmp_dir
+
+    - name: Setup
+      block:
+        - name: Utility
+          block:
+            - name: Create some directory if it does not exist
+              ansible.builtin.file:
+                path: "~/{{ item }}"
+                state: directory
+                mode: '0755'
+              loop:
+                - projects
+                - programs
+                - tmp
+
+            - name: Update DNS servers
+              ansible.builtin.lineinfile:
+                path: /etc/resolv.conf
+                line: nameserver {{ item }}
+                state: present
+                insertafter: EOF
+                backup: no
+              loop:
+                - 8.8.8.8
+                - 1.1.1.1
+                - 8.8.4.4
+                - 1.0.0.1
+              become: yes
+#              tags:
+#                - never
+
+#        - name: Update OS
+#          block:
+#            - name: Add all apt repositories
+#              ansible.builtin.command:
+#                cmd: "add-apt-repository -s -y {{ item }}"
+#              loop:
+#                - main
+#                - universe
+#                - restricted
+#                - multiverse
+#              when: add_all_apt_repo|bool
+#
+#            - name: Performs an aptitude dist-upgrade
+#              ansible.builtin.apt:
+#                update_cache: yes
+#                cache_valid_time: 3600
+#                upgrade: dist
+#                clean: true
+#                autoclean: true
+#                force_apt_get: yes
+#              when: apt_upgrade|bool
+
+#            - name: Check reboot is required
+#              ansible.builtin.shell:
+#                cmd: needs-restarting -r
+#              register: reboot_required
+#
+#            - name: Start
+#              ansible.builtin.debug:
+#                msg: "{{ reboot_required }}"
+#
+#            - name: Reboot if required (kernel updated)
+#              ansible.builtin.reboot:
+#                msg: "Reboot required"
+#                connect_timeout: 5
+#                reboot_timeout: 300
+#                pre_reboot_delay: 0
+#                post_reboot_delay: 30
+#                test_command: uptime
+#              when: reboot_required.rc == 0
+#          become: yes
+
+        - name: Install common packages
+          block:
+            - name: Install dnf
+              ansible.builtin.yum:
+                name: dnf
+                state: present
+              become: yes
+
+            - name: Install common packages dnf sequentially
+              ansible.builtin.dnf:
+                name: "{{ packages }}"
+                state: latest
+              vars:
+                packages:
+                  - epel-release
+                  - elrepo-release
+    #              - pkg-config
+                  - dnf-plugins-core
+              become: yes
+
+            - name: Install common packages yum sequentially
+              ansible.builtin.yum:
+                name: "{{ packages }}"
+                state: present
+              vars:
+                packages:
+                  - scl-utils
+    #              - linux-release-scl
+    #              - linux-release-scl-rh
+                  - yum-utils
+              become: yes
+
+            - name: Install common packages yum
+              ansible.builtin.yum:
+                name:
+                  - vi
+                  - nano
+                  - curl
+                  - wget
+                  - net-tools
+                  - traceroute
+                  - telnet
+                  - ntp
+                  - openssh-server
+                  - openssh-clients
+                  - zip
+                  - tar
+                  - git
+                state: present
+              become: yes
+
+            - name: Install Java
+              block:
+                - name: Install Java
+                  ansible.builtin.yum:
+                    name: java-1.8.0-openjdk-devel
+                    state: present
+                  become: yes
+
+                - name: Set JAVA_HOME environment variable
+                  ansible.builtin.lineinfile:
+                    path: /etc/profile.d/user-defined-env.sh
+                    create: true
+                    line: "{{ item }}"
+                    state: present
+                    insertafter: EOF
+                    backup: no
+                  loop:
+                    - export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+                    - export PATH=$PATH:$JAVA_HOME/bin
+                  become: yes
+
+            - name: Install Python and related components
+              block:
+                - name: Install packages for building python3 init
+                  ansible.builtin.dnf:
+                    name: "{{ packages }}"
+                    state: latest
+                  vars:
+                    packages:
+                      - git
+                      - pkg-config
+                      - dnf-plugins-core
+
+                - name: Install packages for building python3 final
+                  ansible.builtin.command:
+                    cmd: dnf builddep python3
+                    chdir: "{{ tmp_dir.path }}"
+
+                - name: Install packages for optional modules for building python3
+                  ansible.builtin.yum:
+                    name:
+                      - gcc
+                      - gcc-c++
+                      - gdb
+                      - lzma
+                      - glibc-devel
+                      - libstdc++-devel
+                      - openssl-devel
+                      - readline-devel
+                      - zlib-devel
+                      - libffi-devel
+                      - bzip2-devel
+                      - xz-devel
+                      - sqlite
+                      - sqlite-devel
+                      - sqlite-libs
+                      - libuuid-devel
+                      - gdbm-libs
+                      - perf
+                      - expat
+                      - expat-devel
+                      - mpdecimal
+                      - python3-pip
+                    state: present
+              when: install_sdk|bool
+              become: yes
+
+            - name: Install Python
+              ansible.builtin.yum:
+                name:
+                  - python3
+    #              - python3-venv
+    #              - python3-pip
+    #              - python3-setuptools
+                state: present
+              become: yes
+
+            - name: Install packages for building git sequentially
+              ansible.builtin.dnf:
+                name: "{{ packages }}"
+                state: latest
+              vars:
+                packages:
+                  - git-all
+                  - dh-autoreconf
+                  - curl-devel
+                  - expat-devel
+                  - gettext-devel
+                  - openssl-devel
+                  - perl-devel
+                  - zlib-devel
+              when: install_sdk|bool
+              become: yes
+
+#            - name: Install Node.js
+#              block:
+#                - name: Set NodeSource keyring file path
+#                  ansible.builtin.set_fact:
+#                    nodesource_keyring_file: /etc/apt/keyrings/nodesource.gpg
+#
+#                - name: Setup NodeSource’s official GPG key
+#                  ansible.builtin.apt_key:
+#                    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+#                    keyring: "{{ nodesource_keyring_file }}"
+#                    state: present
+#
+#                - name: Setup NodeSource Repository
+#                  ansible.builtin.apt_repository:
+#                    repo: "deb [signed-by={{ nodesource_keyring_file }}] https://deb.nodesource.com/node_{{ nodejs_major_version }}.x nodistro main"
+#                    filename: nodesource
+#                    state: present
+#
+#                - name: Install Node.js
+#                  ansible.builtin.apt:
+#                    name: nodejs
+#                    state: present
+#                    update_cache: true
+#                    force_apt_get: yes
+#              when: nodejs_major_version | length > 0
+#              become: yes
+
+#            - name: Install Docker
+#              block:
+#                - name: Set docker keyring file path
+#                  ansible.builtin.set_fact:
+#                    docker_keyring_file: /etc/apt/keyrings/docker.gpg
+#
+#                - name: Setup Docker’s official GPG key
+#                  ansible.builtin.apt_key:
+#                    url: https://download.docker.com/linux/ubuntu/gpg
+#                    keyring: "{{ docker_keyring_file }}"
+#                    state: present
+#
+#                - name: Setup Docker Repository
+#                  ansible.builtin.apt_repository:
+#                    repo: "deb [arch={{ deb_architecture.stdout }} signed-by={{ docker_keyring_file }}] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+#                    filename: docker
+#                    state: present
+#
+#                - name: Install Docker Engine
+#                  ansible.builtin.apt:
+#                    name:
+#                      - docker-ce
+#                      - docker-ce-cli
+#                      - containerd.io
+#                      - docker-buildx-plugin
+#                      - docker-compose-plugin
+#                    state: present
+#                    update_cache: true
+#                    force_apt_get: yes
+#              when: install_docker|bool
+#              become: yes
+
+#          tags:
+#            - never
+
+        - name: Install HDP
+          block:
+            - name: Prepare OS
+              block:
+                - name: Enable ntp
+                  ansible.builtin.service:
+                    name: ntpd
+                    state: started
+                    enabled: yes
+                  become: yes
+
+                - name: Create groups
+                  ansible.builtin.group:
+                    name: "{{ item }}"
+                    state: present
+                  loop:
+                    - hadoop
+                    - hdfs
+                    - yarn
+                    - ambari
+                  become: yes
+
+                - name: Create ambari user
+                  ansible.builtin.user:
+                    name: ambari
+                    password: "{{ ambaripw | password_hash('sha512') }}"
+                    state: present
+                    group: ambari
+                    groups: ambari,hadoop,hdfs
+                    append: false
+                    create_home: yes
+                    generate_ssh_key: yes
+                    ssh_key_bits: 2048
+                    ssh_key_file: .ssh/id_rsa
+                  become: yes
+
+                - name: Create a symbolic link of public key file for ssh
+                  ansible.builtin.file:
+                    src: /home/ambari/.ssh/id_rsa.pub
+                    dest: /home/ambari/.ssh/authorized_keys
+                    owner: ambari
+                    group: ambari
+                    mode: '0755'
+                    state: link
+                  become: yes
+
+                - name: Ensure server is present in known_hosts file
+                  ansible.builtin.known_hosts:
+                    path: /home/ambari/.ssh/known_hosts
+                    name: "{{ hdp_hostname }}"
+                    key: "{{ lookup('pipe', 'ssh-keyscan ' + hdp_hostname) }}"
+                    state: present
+                  become: yes
+
+                - name: Update ambari .ssh directory owner and permissions
+                  ansible.builtin.file:
+                    path: /home/ambari/.ssh
+                    state: directory
+                    owner: ambari
+                    group: ambari
+                    mode: '0700'
+                    recurse: yes
+                  become: yes
+
+                - name: Configure ambari run as a non-root user (Added config to allow ambari run all command as root)
+                  ansible.builtin.lineinfile:
+                    path: /etc/sudoers
+                    line: "{{ item }}"
+                    state: present
+                    insertafter: EOF
+                    backup: no
+                  loop:
+                    - "# Ambari Commands"
+                    - "ambari ALL=(ALL) NOPASSWD: ALL"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /bin/mkdir -p /etc/security/keytabs, /bin/ls /etc/security/keytabs, /bin/chmod * /etc/security/keytabs/*.keytab, /bin/chown * /etc/security/keytabs/*.keytab, /bin/chgrp * /etc/security/keytabs/*.keytab, /bin/rm -f /etc/security/keytabs/*.keytab, /bin/cp -p -f /var/lib/ambari-server/data/tmp/* /etc/security/keytabs/*.keytab"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /bin/mkdir -p /var/lib/ambari-server/data/tmp, /bin/chmod * /var/lib/ambari-server/data/tmp, /bin/chown * /var/lib/ambari-server/data/tmp, /bin/chgrp * /var/lib/ambari-server/data/tmp, /bin/rm -rf /var/lib/ambari-server/data/tmp/*, /bin/cp -f /tmp/* /var/lib/ambari-server/data/tmp/*, /usr/bin/test * *, /bin/stat -c %u %g %a /var/lib/ambari-server/data/tmp/*"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /sbin/ambari-server *"
+#                    - "# Ambari Customizable Users (Only modify user name in this line)"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /bin/su hdfs *,/bin/su ambari-qa *,/bin/su ranger *,/bin/su zookeeper *,/bin/su knox *,/bin/su falcon *,/bin/su ams *, /bin/su flume *,/bin/su hbase *,/bin/su spark *,/bin/su accumulo *,/bin/su hive *,/bin/su hcat *,/bin/su kafka *,/bin/su mapred *,/bin/su oozie *,/bin/su sqoop *,/bin/su storm *,/bin/su tez *,/bin/su atlas *,/bin/su yarn *,/bin/su yarn-ats *,/bin/su kms *,/bin/su activity_analyzer *,/bin/su livy *,/bin/su zeppelin *,/bin/su infra-solr *,/bin/su logsearch *"
+#                    - "# Ambari: Core System Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/bin/yum,/usr/bin/zypper,/usr/bin/apt-get, /bin/mkdir, /usr/bin/test, /bin/ln, /bin/ls, /bin/chown, /bin/chmod, /bin/chgrp, /bin/cp, /usr/sbin/setenforce, /usr/bin/test, /usr/bin/stat, /bin/mv, /bin/sed, /bin/rm, /bin/kill, /bin/readlink, /usr/bin/pgrep, /bin/cat, /usr/bin/unzip, /bin/tar, /usr/bin/tee, /bin/touch, /usr/bin/mysql, /sbin/service mysqld *, /usr/bin/dpkg *, /bin/rpm *, /usr/sbin/hst *"
+#                    - "# Ambari: Ambari Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/sbin/ambari-agent *, /var/lib/ambari-agent/tmp/create-python-wrap.sh, /usr/bin/python /var/lib/ambari-agent/tmp/setupAgent*.py *"
+#                    - "# Ambari: Hadoop and Configuration Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/bin/hdp-select, /usr/bin/conf-select, /usr/hdp/current/hadoop-client/sbin/hadoop-daemon.sh, /usr/lib/hadoop/bin/hadoop-daemon.sh, /usr/lib/hadoop/sbin/hadoop-daemon.sh, /usr/bin/ambari-python-wrap *"
+#                    - "# Ambari: System User and Group Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/sbin/groupadd, /usr/sbin/groupmod, /usr/sbin/useradd, /usr/sbin/usermod"
+#                    - "# Ambari: Kerberos Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/bin/klist -k /etc/security/keytabs/*"
+#                    - "# Ambari: Knox Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/bin/python2.6 /var/lib/ambari-agent/data/tmp/validateKnoxStatus.py *, /usr/hdp/current/knox-server/bin/knoxcli.sh"
+#                    - "# Ambari: Ranger Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/hdp/*/ranger-usersync/setup.sh, /usr/bin/ranger-usersync-stop, /usr/bin/ranger-usersync-start, /usr/hdp/*/ranger-admin/setup.sh *, /usr/hdp/*/ranger-knox-plugin/disable-knox-plugin.sh *, /usr/hdp/*/ranger-storm-plugin/disable-storm-plugin.sh *, /usr/hdp/*/ranger-hbase-plugin/disable-hbase-plugin.sh *, /usr/hdp/*/ranger-hdfs-plugin/disable-hdfs-plugin.sh *, /usr/hdp/current/ranger-admin/ranger_credential_helper.py, /usr/hdp/current/ranger-kms/ranger_credential_helper.py, /usr/hdp/*/ranger-*/ranger_credential_helper.py"
+#                    - "# Ambari Infra and LogSearch Commands"
+#                    - "ambari ALL=(ALL) NOPASSWD:SETENV: /usr/lib/ambari-infra-solr/bin/solr *, /usr/lib/ambari-logsearch-logfeeder/run.sh *, /usr/sbin/ambari-metrics-grafana *, /usr/lib/ambari-infra-solr-client/solrCloudCli.sh *"
+                    - "Defaults exempt_group = ambari"
+                    - "Defaults !env_reset,env_delete-=PATH"
+                    - "Defaults: ambari !requiretty"
+                  become: yes
+
+                - name: Increase limit concurrent open file
+                  ansible.builtin.shell:
+                    cmd: ulimit -n 10000
+                    chdir: "{{ tmp_dir.path }}"
+                  become: yes
+
+                - name: Set a hostname
+                  ansible.builtin.hostname:
+                    name: "{{ hdp_hostname }}"
+                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
+                  become: yes
+
+#                - name: Set host routing for single node (Not succeed on testing)
+#                  ansible.builtin.lineinfile:
+#                    path: /etc/hosts line: 127.0.0.1 {{ hdp_hostname }}
+#                    state: present
+#                    insertafter: EOF
+#                    backup: no
+#                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
+#                  become: yes
+
+                - name: Disable firewall
+                  ansible.builtin.service:
+                    name: firewalld
+                    state: stopped
+                    enabled: no
+                  become: yes
+
+                - name: Install ansible.posix.selinux requirements
+                  ansible.builtin.yum:
+                    name: libselinux-python3
+                    state: present
+                  become: yes
+
+                - name: Disable SELinux
+                  ansible.posix.selinux:
+                    state: disabled
+                  become: yes
+
+#                - name: Reboot for SELinux state take effect
+#                  ansible.builtin.reboot:
+#                    msg: "Reboot required"
+#                    connect_timeout: 5
+#                    reboot_timeout: 300
+#                    pre_reboot_delay: 0
+#                    post_reboot_delay: 30
+#                    test_command: uptime
+#                  become: yes
+
+                - name: Permanently changing the umask for all interactive users
+                  ansible.builtin.lineinfile:
+                    path: /etc/profile
+                    line: umask 0022
+                    state: present
+                    insertafter: EOF
+                    backup: no
+                  become: yes
+
+                - name: Install the epel repository
+                  ansible.builtin.yum:
+                    name: epel-release
+                    state: present
+                  become: yes
+#              tags:
+#                - never
+
+            - name: Install mysql
+              block:
+                - name: Add mysql repo
+                  ansible.builtin.shell:
+                    cmd: yum localinstall -y https://dev.mysql.com/get/mysql57-community-release-el7-8.noarch.rpm
+                    chdir: "{{ tmp_dir.path }}"
+                  become: yes
+
+                - name: Install mysql
+                  ansible.builtin.yum:
+                    name:
+                      - mysql-community-client
+                      - mysql-community-server
+                      - mysql-connector-j
+                    disable_gpg_check: true
+                    state: present
+                  become: yes
+
+                - name: Populate service facts (if mysql is installed for the first time, then its status will not equal to enabled)
+                  ansible.builtin.service_facts:
+
+                - name: Enable mysqld
+                  ansible.builtin.service:
+                    name: mysqld
+                    state: started
+                    enabled: yes
+                  become: yes
+
+                - name: Update mysql password policies
+                  community.general.ini_file:
+                    path: /etc/my.cnf
+                    section: mysqld
+                    option: "{{ item.option }}"
+                    value: "{{ item.value }}"
+                    state: present
+                  loop:
+                    - option: validate_password_policy
+                      value: "'LOW'"
+                    - option: validate_password_check_user_name
+                      value: "'OFF'"
+                    - option: validate_password_length
+                      value: 1
+                    - option: validate_password_mixed_case_count
+                      value: 0
+                    - option: validate_password_number_count
+                      value: 0
+                    - option: validate_password_special_char_count
+                      value: 0
+                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
+                  become: yes
+
+                - name: Restart mysqld if update config
+                  ansible.builtin.service:
+                    name: mysqld
+                    state: restarted
+                    enabled: yes
+                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
+                  become: yes
+
+                - name: Get mysql db root temporary password
+                  ansible.builtin.shell:
+                    cmd: grep "A temporary password is generated for root@localhost" /var/log/mysqld.log | tail -n 1 | awk '{print $NF}'
+                    chdir: "{{ tmp_dir.path }}"
+                  register: mysql_root_pw
+                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
+                  become: yes
+
+                - name: Secure mysql db
+                  expect:
+                    command: mysql_secure_installation
+                    responses:
+                      "Enter password for user root": "{{ mysql_root_pw.stdout }}"
+                      "Change the password for root": "y"
+                      "New password": "{{ mysqldb_rootpw }}"
+                      "Re-enter new password": "{{ mysqldb_rootpw }}"
+                      "Do you wish to continue with the password provided": "y"
+                      "Remove anonymous users": "y"
+                      "Disallow root login remotely": "y"
+                      "Remove test database and access to it": "y"
+                      "Reload privilege tables now": "y"
+                    timeout: 1
+                  register: secure_mysqldb
+                  failed_when: "'... Failed!' in secure_mysqldb.stdout_lines"
+                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
+
+                - name: Create hive database
+                  community.mysql.mysql_db:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: hive
+                    encoding: utf8
+                    state: present
+                    chdir: "{{ tmp_dir.path }}"
+
+                - name: Create hive user
+                  community.mysql.mysql_user:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: hive
+                    password: "{{ hivepw }}"
+                    password_expire: never
+                    host: 'localhost'
+                    priv: 'hive.*:ALL,GRANT'
+                    state: present
+#              tags:
+#                - never
+
+            - name: Setup installation repo
+              block:
+                - name: Install httpd
+                  ansible.builtin.yum:
+                    name: httpd
+                    state: present
+                  become: yes
+
+                - name: Populate service facts (if httpd is installed for the first time, then its status will not equal to enabled)
+                  ansible.builtin.service_facts:
+
+                - name: Enable httpd
+                  ansible.builtin.service:
+                    name: httpd
+                    state: started
+                    enabled: yes
+                  become: yes
+
+                - name: Extract installation files
+                  ansible.builtin.unarchive:
+                    src: "{{ item.value }}"
+                    dest: /var/www/html/
+                  loop: "{{ hdp_instalation_files | dict2items }}"
+                  when: ansible_facts.services['httpd.service'].status != 'enabled'
+                  become: yes
+
+                - name: Change .html files to avoid http error
+                  ansible.builtin.shell:
+                    cmd: |
+                      for file in ./*/*/*/*.html; do
+                        echo $(readlink -f "$file")
+                          mv -- $(readlink -f "$file") "${file%.html}.html.bk"
+                      done
+                    chdir: /var/www/html/
+                  when: ansible_facts.services['httpd.service'].status != 'enabled'
+                  become: yes
+
+                - name: Update repo base url
+                  community.general.ini_file:
+                    path: "{{ item.path }}"
+                    section: "{{ item.section }}"
+                    option: "{{ item.option }}"
+                    value: "{{ item.value }}"
+                    state: present
+                  loop:
+                    - path: /var/www/html/ambari/centos7/2.7.4.0-118/ambari.repo
+                      section: ambari-2.7.4.0
+                      option: baseurl
+                      value: http://localhost:80/ambari/centos7/2.7.4.0-118/
+                    - path: /var/www/html/ambari/centos7/2.7.4.0-118/ambari.repo
+                      section: ambari-2.7.4.0
+                      option: gpgcheck
+                      value: 0
+                    - path: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
+                      section: HDP-3.1.4.0
+                      option: baseurl
+                      value: http://localhost:80/HDP/centos7/3.1.4.0-315/
+                    - path: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
+                      section: HDP-3.1.4.0
+                      option: gpgcheck
+                      value: 0
+                    - path: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
+                      section: HDP-UTILS-1.1.0.22
+                      option: baseurl
+                      value: http://localhost:80/HDP-UTILS/centos7/1.1.0.22/
+                    - path: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
+                      section: HDP-UTILS-1.1.0.22
+                      option: gpgcheck
+                      value: 0
+                  become: yes
+
+                - name: Create repo files (HDP already contains HDP-UTILS)
+                  ansible.builtin.copy:
+                    src: "{{ item.src }}"
+                    dest: "{{ item.dest }}"
+                    owner: root
+                    group: root
+                    mode: '0755'
+                  loop:
+                    - src: /var/www/html/ambari/centos7/2.7.4.0-118/ambari.repo
+                      dest: /etc/yum.repos.d/ambari.repo
+                    - src: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
+                      dest: /etc/yum.repos.d/hdp.repo
+                  become: yes
+#              tags:
+#                - never
+
+            - name: Install ambari server and config
+              block:
+                - name: Install ambari server
+                  ansible.builtin.yum:
+                    name: ambari-server
+                    state: present
+                  become: yes
+
+                - name: Populate service facts (if ambari-server is installed for the first time, then its status will not equal to active)
+                  ansible.builtin.service_facts:
+
+                - name: Update repo base url
+                  community.general.xml:
+                    path: /var/lib/ambari-server/resources/stacks/HDP/3.1/repos/repoinfo.xml
+                    xpath: "{{ item.xpath }}"
+                    value: "{{ item.value }}"
+                  loop:
+                    - xpath: /reposinfo/os[@family="redhat7"]/repo[reponame="HDP"]/baseurl
+                      value: http://localhost:80/HDP/centos7/3.1.4.0-315/
+                    - xpath: /reposinfo/os[@family="redhat7"]/repo[reponame="HDP-UTILS"]/baseurl
+                      value: http://localhost:80/HDP-UTILS/centos7/1.1.0.22/
+                  become: yes
+
+                - name: Create ambari database
+                  community.mysql.mysql_db:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: ambari
+                    encoding: utf8
+                    state: present
+                    chdir: "{{ tmp_dir.path }}"
+
+                - name: Create ambari user
+                  community.mysql.mysql_user:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: ambari
+                    password: "{{ ambaripw }}"
+                    password_expire: never
+                    host: 'localhost'
+                    priv: 'ambari.*:ALL,GRANT'
+                    state: present
+
+                - name: Setup ambari-server (skip create db schema)
+                  expect:
+                    command: ambari-server setup -j $JAVA_HOME
+                    responses:
+                      "Customize user account for ambari-server daemon": "y"
+                      "Ambari-server daemon is configured to run under user": "y"
+                      "Enter user account for ambari-server daemon": "ambari"
+                      "Enable Ambari Server to download and install GPL Licensed LZO packages": "n"
+                      "Enter advanced database configuration": "n"
+#                      "Enter choice": "3"
+#                      "Hostname": "locahost"
+#                      "Port": "3306"
+#                      "Database name": "ambari"
+#                      "Username": "ambari"
+#                      "Enter Database Password": "{{ ambaripw }}"
+#                      "Re-enter password": "{{ ambaripw }}"
+#                      "Should ambari use existing default jdbc": "n"
+#                      "Enter full path to custom jdbc driver": "/usr/share/java/mysql-connector-java.jar"
+#                      "Proceed with configuring remote database connection properties": "y"
+                    timeout: 1
+                  register: setup_ambari_server
+                  failed_when: "'ERROR' in setup_ambari_server.stdout_lines"
+                  when: ansible_facts.services['ambari-server.service'].status != 'active'
+                  become: yes
+
+                - name: Config ambari server (run 2 times)
+                  ansible.builtin.shell:
+                    cmd: |
+                      ambari-server setup -j $JAVA_HOME \
+                        --database=mysql --databasehost=localhost --databaseport=3306 \
+                        --databasename=ambari --databaseusername=ambari --databasepassword="{{ ambaripw }}" \
+                        --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
+                        --enable-lzo-under-gpl-license
+                    chdir: "{{ tmp_dir.path }}"
+                  loop:
+                    - first
+                    - second
+                  when: ansible_facts.services['ambari-server.service'].status != 'active'
+                  become: yes
+
+                - name: Create ambari database schema
+                  ansible.builtin.shell:
+                    cmd: mysql -uambari -p"{{ ambaripw }}" ambari < /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql
+                    chdir: "{{ tmp_dir.path }}"
+                  when: ansible_facts.services['ambari-server.service'].status != 'active'
+                  become: yes
+
+                - name: Update ambari-server config
+                  ansible.builtin.lineinfile:
+                    path: /etc/ambari-server/conf/ambari.properties
+                    line: client.api.port=8080
+                    state: present
+                    insertafter: EOF
+                    backup: no
+                  become: yes
+
+                - name: Change ownership of ambari directories for ambari-server
+                  ansible.builtin.file:
+                    path: "{{ item }}"
+                    state: directory
+                    recurse: yes
+                    owner: ambari
+                    group: ambari
+                  loop:
+                    - /etc/ambari-server
+                    - /var/run/ambari-server
+                    - /var/lib/ambari-server
+                    - /var/log/ambari-server
+                  become: yes
+
+                - name: Enable ambari-server
+                  ansible.builtin.service:
+                    name: ambari-server
+                    state: started
+                    enabled: yes
+                  become: yes
+#              tags:
+#                - never
+
+            - name: Install ambari agent and config
+              block:
+                - name: Install ambari agent
+                  ansible.builtin.yum:
+                    name: ambari-agent
+                    state: present
+                  become: yes
+
+                - name: Change ownership of ambari directories for ambari-agent
+                  ansible.builtin.file:
+                    path: "{{ item }}"
+                    state: directory
+                    recurse: yes
+                    owner: ambari
+                    group: ambari
+                  loop:
+                    - /etc/ambari-agent
+                    - /var/run/ambari-agent
+                    - /var/lib/ambari-agent
+                    - /var/log/ambari-agent
+                  become: yes
+
+                - name: Update ambari agent config
+                  community.general.ini_file:
+                    path: /etc/ambari-agent/conf/ambari-agent.ini
+                    section: "{{ item.section }}"
+                    option: "{{ item.option }}"
+                    value: "{{ item.value }}"
+                    state: present
+                  loop:
+                    - section: server
+                      option: hostname
+                      value: "{{ hdp_hostname }}"
+                    - section: server
+                      option: url_port
+                      value: 8440
+                    - section: server
+                      option: secured_url_port
+                      value: 8441
+                    - section: agent
+                      option: run_as_user
+                      value: ambari
+                  become: yes
+
+                - name: Enable ambari-agent
+                  ansible.builtin.service:
+                    name: ambari-agent
+                    state: started
+                    enabled: yes
+                  become: yes
+#              tags:
+#                - never
+
+            - name: Debug
+              ansible.builtin.debug:
+                msg: "{{ tmp_dir.path }}"
+              tags:
+                - never
+      always:
+        - name: Cleanup
+          ansible.builtin.file:
+            path: "{{ tmp_dir.path }}"
+            state: absent
+          when: tmp_dir.path is defined
