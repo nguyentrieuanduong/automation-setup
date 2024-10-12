@@ -795,7 +795,7 @@
                     state: present
                   when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
 
-                - name: Setup ambari-server
+                - name: Setup ambari-server (need to run 2 times)
                   expect:
                     command: ambari-server setup -j {{ java_home_out.stdout }}
                     responses:
@@ -817,20 +817,23 @@
                     timeout: 300
                   register: setup_ambari_server
                   failed_when: "'fail' in setup_ambari_server.stdout_lines"
+                  loop:
+                    - first
+                    - second
                   when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
-                - name: Config ambari server
-                  ansible.builtin.shell:
-                    cmd: |
-                      ambari-server setup -j $JAVA_HOME \
-                        --database=mysql --databasehost=localhost --databaseport=3306 \
-                        --databasename=ambari --databaseusername=ambari --databasepassword="{{ ambaripw }}" \
-                        --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
-                        --enable-lzo-under-gpl-license
-                    chdir: "{{ tmp_dir.path }}"
-                  when: "'ambari-server.service' not in ansible_facts.services"
-                  become: yes
+#                - name: *Not necessary* Config ambari server
+#                  ansible.builtin.shell:
+#                    cmd: |
+#                      ambari-server setup -j $JAVA_HOME \
+#                        --database=mysql --databasehost=localhost --databaseport=3306 \
+#                        --databasename=ambari --databaseusername=ambari --databasepassword="{{ ambaripw }}" \
+#                        --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
+#                        --enable-lzo-under-gpl-license
+#                    chdir: "{{ tmp_dir.path }}"
+#                  when: "'ambari-server.service' not in ansible_facts.services"
+#                  become: yes
 
                 - name: Create ambari database schema (Required, ambari-server setup command does not take create structure affect)
                   ansible.builtin.shell:
