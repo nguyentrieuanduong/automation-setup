@@ -1,11 +1,15 @@
 ---
 # Follow the README file to create, activate python virtual environment and install the required components
+# #wget -O "ambari-2.7.4.0-centos7.tar.gz" "http://host.domain/download/ambari-2.7.4.0-centos7.tar.gz"
+# #wget -O "HDP-3.1.4.0-centos7-rpm.tar.gz" "http://host.domain/download/HDP-3.1.4.0-centos7-rpm.tar.gz"
+# #wget -O "HDP-UTILS-1.1.0.22-centos7.tar.gz" "http://host.domain/download/HDP-UTILS-1.1.0.22-centos7.tar.gz"
+# #wget -O "HDP-GPL-3.1.4.0-centos7-gpl.tar.gz" "HDP-GPL-3.1.4.0-centos7-gpl.tar.gz"
 # sudo yum install -y python3
 # mkdir ~/tmp; cd ~/tmp; python3 -m venv .venv; source .venv/bin/activate
 # pip install -U pip setuptools wheel
 # pip install ansible pexpect PyMySQL lxml
-# ansible-galaxy collection install community.general ansible.posix community.mysql
-# ansible-playbook local/init-hdp-host.yml -e ansible_python_interpreter=$(which python) -e "yum_upgrade=no install_sdk=no" -e '{"hdp_hostname":"localhost.localdomain","single_node":true}'
+# ansible-galaxy collection install community.mysql  # Collection community.general is needed but current create error
+# ansible-playbook local/init-hdp-host.yml -e ansible_python_interpreter=$(which python) -e "yum_upgrade=no install_sdk=no" -e '{"hdp_hostname":"hdp-host.internal.cloudapp.net"}'
 - name: Standalone init HDP host playbook
   vars:
     - target_hosts: localhost
@@ -13,7 +17,6 @@
     - yum_upgrade: no
     - install_sdk: no
     - hdp_hostname: "localhost"
-    - single_node: true
     - mysqldb_rootpw: "admin"
     - ambaripw: "ambari"
     - hivepw: "hive"
@@ -44,7 +47,7 @@
     - name: Skip (not fail) if OS is Debian
       ansible.builtin.fail:
         msg: ERROR! OS family is not Debian
-      when: ansible_facts['os_family']|lower != 'redhat'
+      when: ansible_facts.os_family | lower != 'redhat'
 
     - name: Create temporary working directory
       ansible.builtin.tempfile:
@@ -78,6 +81,28 @@
                 - 1.1.1.1
                 - 8.8.4.4
                 - 1.0.0.1
+              become: yes
+
+            - name: Switch CentOS repositories to Vault archive repositories
+              community.general.ini_file:
+                path: /etc/yum.repos.d/CentOS-Base.repo
+                section: "{{ item.section }}"
+                option: "{{ item.option }}"
+                value: "{{ item.value }}"
+                state: present
+              loop:
+                - section: base
+                  option: baseurl
+                  value: http://vault.centos.org/7.9.2009/os/$basearch/
+                - section: updates
+                  option: baseurl
+                  value: http://vault.centos.org/7.9.2009/updates/$basearch/
+                - section: extras
+                  option: baseurl
+                  value: http://vault.centos.org/7.9.2009/extras/$basearch/
+                - section: centosplus
+                  option: baseurl
+                  value: http://vault.centos.org/7.9.2009/centosplus/$basearch/
               become: yes
 #              tags:
 #                - never
@@ -195,6 +220,12 @@
                     - export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
                     - export PATH=$PATH:$JAVA_HOME/bin
                   become: yes
+
+#                - name: Load JAVA_HOME environment variable
+#                  ansible.builtin.shell:
+#                    cmd: source /etc/profile.d/user-defined-env.sh
+#                    chdir: "{{ tmp_dir.path }}"
+#                  become: yes
 
             - name: Install Python and related components
               block:
@@ -335,12 +366,88 @@
           block:
             - name: Prepare OS
               block:
+                - name: Get SELinux status
+                  ansible.builtin.shell:
+                    cmd: getenforce
+                    chdir: "{{ tmp_dir.path }}"
+                  register: selinux_status
+
+#                - name: Install ansible.posix.selinux requirements
+#                  ansible.builtin.yum:
+#                    name: libselinux-python3
+#                    state: present
+
+#                - name: *NOT WORK* Disable SELinux
+#                  ansible.posix.selinux:
+#                    state: disabled
+
+                - name: Disable SELinux enforcing
+                  ansible.builtin.shell:
+                    cmd: setenforce 0
+                    chdir: "{{ tmp_dir.path }}"
+                  when: selinux_status.stdout | lower != "disabled"
+
+                - name: Disable SELinux permanently (No section required)
+                  ansible.builtin.lineinfile:
+                    path: /etc/sysconfig/selinux
+                    regexp: '^SELINUX='
+                    line: SELINUX=disabled
+                    state: present
+                    backup: no
+                  when: selinux_status.stdout | lower != "disabled"
+
+#                - name: Reboot for SELinux state take effect
+#                  ansible.builtin.reboot:
+#                    msg: "Reboot required"
+#                    connect_timeout: 5
+#                    reboot_timeout: 300
+#                    pre_reboot_delay: 0
+#                    post_reboot_delay: 30
+#                    test_command: uptime
+
+                - name: Increase limit concurrent open file
+                  ansible.builtin.shell:
+                    cmd: ulimit -n 10000
+                    chdir: "{{ tmp_dir.path }}"
+
+                - name: Permanently changing the umask for all interactive users
+                  ansible.builtin.lineinfile:
+                    path: /etc/profile
+                    line: umask 0022
+                    state: present
+                    insertafter: EOF
+                    backup: no
+
+                - name: Set a hostname
+                  ansible.builtin.hostname:
+                    name: "{{ hdp_hostname }}"
+                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
+
+                - name: Set host routing for single node
+                  ansible.builtin.lineinfile:
+                    path: /etc/hosts
+                    line: 127.0.0.1 {{ hdp_hostname }}
+                    state: present
+                    insertafter: EOF
+                    backup: no
+                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
+
+                - name: Disable firewall
+                  ansible.builtin.service:
+                    name: firewalld
+                    state: stopped
+                    enabled: no
+
+                - name: Install the epel repository
+                  ansible.builtin.yum:
+                    name: epel-release
+                    state: present
+
                 - name: Enable ntp
                   ansible.builtin.service:
                     name: ntpd
                     state: started
                     enabled: yes
-                  become: yes
 
                 - name: Create groups
                   ansible.builtin.group:
@@ -351,7 +458,6 @@
                     - hdfs
                     - yarn
                     - ambari
-                  become: yes
 
                 - name: Create ambari user
                   ansible.builtin.user:
@@ -365,7 +471,6 @@
                     generate_ssh_key: yes
                     ssh_key_bits: 2048
                     ssh_key_file: .ssh/id_rsa
-                  become: yes
 
                 - name: Create a symbolic link of public key file for ssh
                   ansible.builtin.file:
@@ -375,15 +480,16 @@
                     group: ambari
                     mode: '0755'
                     state: link
-                  become: yes
 
                 - name: Ensure server is present in known_hosts file
                   ansible.builtin.known_hosts:
                     path: /home/ambari/.ssh/known_hosts
-                    name: "{{ hdp_hostname }}"
-                    key: "{{ lookup('pipe', 'ssh-keyscan ' + hdp_hostname) }}"
+                    name: "{{ item }}"
+                    key: "{{ lookup('pipe', 'ssh-keyscan ' + item) }}"
                     state: present
-                  become: yes
+                  loop:
+                    - localhost
+                    - "{{ hdp_hostname }}"
 
                 - name: Update ambari .ssh directory owner and permissions
                   ansible.builtin.file:
@@ -393,7 +499,6 @@
                     group: ambari
                     mode: '0700'
                     recurse: yes
-                  become: yes
 
                 - name: Configure ambari run as a non-root user (Added config to allow ambari run all command as root)
                   ansible.builtin.lineinfile:
@@ -429,216 +534,118 @@
                     - "Defaults exempt_group = ambari"
                     - "Defaults !env_reset,env_delete-=PATH"
                     - "Defaults: ambari !requiretty"
-                  become: yes
-
-                - name: Increase limit concurrent open file
-                  ansible.builtin.shell:
-                    cmd: ulimit -n 10000
-                    chdir: "{{ tmp_dir.path }}"
-                  become: yes
-
-                - name: Set a hostname
-                  ansible.builtin.hostname:
-                    name: "{{ hdp_hostname }}"
-                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
-                  become: yes
-
-#                - name: Set host routing for single node (Not succeed on testing)
-#                  ansible.builtin.lineinfile:
-#                    path: /etc/hosts line: 127.0.0.1 {{ hdp_hostname }}
-#                    state: present
-#                    insertafter: EOF
-#                    backup: no
-#                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
-#                  become: yes
-
-                - name: Disable firewall
-                  ansible.builtin.service:
-                    name: firewalld
-                    state: stopped
-                    enabled: no
-                  become: yes
-
-                - name: Install ansible.posix.selinux requirements
-                  ansible.builtin.yum:
-                    name: libselinux-python3
-                    state: present
-                  become: yes
-
-                - name: Disable SELinux
-                  ansible.posix.selinux:
-                    state: disabled
-                  become: yes
-
-#                - name: Reboot for SELinux state take effect
-#                  ansible.builtin.reboot:
-#                    msg: "Reboot required"
-#                    connect_timeout: 5
-#                    reboot_timeout: 300
-#                    pre_reboot_delay: 0
-#                    post_reboot_delay: 30
-#                    test_command: uptime
-#                  become: yes
-
-                - name: Permanently changing the umask for all interactive users
-                  ansible.builtin.lineinfile:
-                    path: /etc/profile
-                    line: umask 0022
-                    state: present
-                    insertafter: EOF
-                    backup: no
-                  become: yes
-
-                - name: Install the epel repository
-                  ansible.builtin.yum:
-                    name: epel-release
-                    state: present
-                  become: yes
+              become: yes
 #              tags:
 #                - never
 
             - name: Install mysql
               block:
-                - name: Add mysql repo
-                  ansible.builtin.shell:
-                    cmd: yum localinstall -y https://dev.mysql.com/get/mysql57-community-release-el7-8.noarch.rpm
-                    chdir: "{{ tmp_dir.path }}"
-                  become: yes
-
-                - name: Install mysql
-                  ansible.builtin.yum:
-                    name:
-                      - mysql-community-client
-                      - mysql-community-server
-                      - mysql-connector-j
-                    disable_gpg_check: true
-                    state: present
-                  become: yes
-
-                - name: Populate service facts (if mysql is installed for the first time, then its status will not equal to enabled)
+                - name: Populate service facts (if mysql is not installed, then it will not apear)
                   ansible.builtin.service_facts:
 
-                - name: Enable mysqld
-                  ansible.builtin.service:
-                    name: mysqld
-                    state: started
-                    enabled: yes
-                  become: yes
+                - name: Install mysql and config
+                  block:
+                    - name: Add mysql repo
+                      ansible.builtin.shell:
+                        cmd: yum localinstall -y https://dev.mysql.com/get/mysql57-community-release-el7-8.noarch.rpm
+                        chdir: "{{ tmp_dir.path }}"
+                      become: yes
 
-                - name: Update mysql password policies
-                  community.general.ini_file:
-                    path: /etc/my.cnf
-                    section: mysqld
-                    option: "{{ item.option }}"
-                    value: "{{ item.value }}"
-                    state: present
-                  loop:
-                    - option: validate_password_policy
-                      value: "'LOW'"
-                    - option: validate_password_check_user_name
-                      value: "'OFF'"
-                    - option: validate_password_length
-                      value: 1
-                    - option: validate_password_mixed_case_count
-                      value: 0
-                    - option: validate_password_number_count
-                      value: 0
-                    - option: validate_password_special_char_count
-                      value: 0
-                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
-                  become: yes
+                    - name: Install mysql
+                      ansible.builtin.yum:
+                        name:
+                          - mysql-community-client
+                          - mysql-community-server
+                          - mysql-connector-j
+                        disable_gpg_check: true
+                        state: present
+                      become: yes
 
-                - name: Restart mysqld if update config
-                  ansible.builtin.service:
-                    name: mysqld
-                    state: restarted
-                    enabled: yes
-                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
-                  become: yes
+                    - name: Enable mysqld
+                      ansible.builtin.service:
+                        name: mysqld
+                        state: started
+                        enabled: yes
+                      become: yes
 
-                - name: Get mysql db root temporary password
-                  ansible.builtin.shell:
-                    cmd: grep "A temporary password is generated for root@localhost" /var/log/mysqld.log | tail -n 1 | awk '{print $NF}'
-                    chdir: "{{ tmp_dir.path }}"
-                  register: mysql_root_pw
-                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
-                  become: yes
+                    - name: Update mysql password policies
+                      community.general.ini_file:
+                        path: /etc/my.cnf
+                        section: mysqld
+                        option: "{{ item.option }}"
+                        value: "{{ item.value }}"
+                        state: present
+                      loop:
+                        - option: validate_password_policy
+                          value: "'LOW'"
+                        - option: validate_password_check_user_name
+                          value: "'OFF'"
+                        - option: validate_password_length
+                          value: 1
+                        - option: validate_password_mixed_case_count
+                          value: 0
+                        - option: validate_password_number_count
+                          value: 0
+                        - option: validate_password_special_char_count
+                          value: 0
+                      become: yes
 
-                - name: Secure mysql db
-                  expect:
-                    command: mysql_secure_installation
-                    responses:
-                      "Enter password for user root": "{{ mysql_root_pw.stdout }}"
-                      "Change the password for root": "y"
-                      "New password": "{{ mysqldb_rootpw }}"
-                      "Re-enter new password": "{{ mysqldb_rootpw }}"
-                      "Do you wish to continue with the password provided": "y"
-                      "Remove anonymous users": "y"
-                      "Disallow root login remotely": "y"
-                      "Remove test database and access to it": "y"
-                      "Reload privilege tables now": "y"
-                    timeout: 1
-                  register: secure_mysqldb
-                  failed_when: "'... Failed!' in secure_mysqldb.stdout_lines"
-                  when: ansible_facts.services['mysqld.service'].status != 'enabled'
+                    - name: Restart mysqld if update config
+                      ansible.builtin.service:
+                        name: mysqld
+                        state: restarted
+                        enabled: yes
+                      become: yes
 
-                - name: Create hive database
-                  community.mysql.mysql_db:
-                    login_host: localhost
-                    login_port: 3306
-                    check_hostname: false
-                    connect_timeout: 5
-                    config_file: ""
-                    login_user: root
-                    login_password: "{{ mysqldb_rootpw }}"
-                    name: hive
-                    encoding: utf8
-                    state: present
-                    chdir: "{{ tmp_dir.path }}"
+                    - name: Get mysql db root temporary password
+                      ansible.builtin.shell:
+                        cmd: grep "A temporary password is generated for root@localhost" /var/log/mysqld.log | tail -n 1 | awk '{print $NF}'
+                        chdir: "{{ tmp_dir.path }}"
+                      register: mysql_root_pw
+                      become: yes
 
-                - name: Create hive user
-                  community.mysql.mysql_user:
-                    login_host: localhost
-                    login_port: 3306
-                    check_hostname: false
-                    connect_timeout: 5
-                    config_file: ""
-                    login_user: root
-                    login_password: "{{ mysqldb_rootpw }}"
-                    name: hive
-                    password: "{{ hivepw }}"
-                    password_expire: never
-                    host: 'localhost'
-                    priv: 'hive.*:ALL,GRANT'
-                    state: present
+                    - name: Secure mysql db
+                      expect:
+                        command: mysql_secure_installation
+                        responses:
+                          "Enter password for user root": "{{ mysql_root_pw.stdout }}"
+                          "Change the password for root": "y"
+                          "New password": "{{ mysqldb_rootpw }}"
+                          "Re-enter new password": "{{ mysqldb_rootpw }}"
+                          "Do you wish to continue with the password provided": "y"
+                          "Remove anonymous users": "y"
+                          "Disallow root login remotely": "y"
+                          "Remove test database and access to it": "y"
+                          "Reload privilege tables now": "y"
+                        timeout: 300
+                      register: secure_mysqldb
+                      failed_when: "'... Failed!' in secure_mysqldb.stdout_lines"
+                  when: "'mysqld.service' not in ansible_facts.services"
 #              tags:
 #                - never
 
             - name: Setup installation repo
               block:
+                - name: Populate service facts (if httpd is not installed, then it will not apear)
+                  ansible.builtin.service_facts:
+
                 - name: Install httpd
                   ansible.builtin.yum:
                     name: httpd
                     state: present
-                  become: yes
-
-                - name: Populate service facts (if httpd is installed for the first time, then its status will not equal to enabled)
-                  ansible.builtin.service_facts:
 
                 - name: Enable httpd
                   ansible.builtin.service:
                     name: httpd
                     state: started
                     enabled: yes
-                  become: yes
 
                 - name: Extract installation files
                   ansible.builtin.unarchive:
                     src: "{{ item.value }}"
                     dest: /var/www/html/
                   loop: "{{ hdp_instalation_files | dict2items }}"
-                  when: ansible_facts.services['httpd.service'].status != 'enabled'
-                  become: yes
+                  when: "'httpd.service' not in ansible_facts.services"
 
                 - name: Change .html files to avoid http error
                   ansible.builtin.shell:
@@ -648,8 +655,7 @@
                           mv -- $(readlink -f "$file") "${file%.html}.html.bk"
                       done
                     chdir: /var/www/html/
-                  when: ansible_facts.services['httpd.service'].status != 'enabled'
-                  become: yes
+                  when: "'httpd.service' not in ansible_facts.services"
 
                 - name: Update repo base url
                   community.general.ini_file:
@@ -683,7 +689,6 @@
                       section: HDP-UTILS-1.1.0.22
                       option: gpgcheck
                       value: 0
-                  become: yes
 
                 - name: Create repo files (HDP already contains HDP-UTILS)
                   ansible.builtin.copy:
@@ -697,20 +702,39 @@
                       dest: /etc/yum.repos.d/ambari.repo
                     - src: /var/www/html/HDP/centos7/3.1.4.0-315/hdp.repo
                       dest: /etc/yum.repos.d/hdp.repo
-                  become: yes
+              become: yes
 #              tags:
 #                - never
 
+            - name: Reboot if required
+              block:
+                - name: Get JAVA_HOME environment variable
+                  ansible.builtin.shell:
+                    cmd: echo $JAVA_HOME
+                    chdir: "{{ tmp_dir.path }}"
+                  register: java_home_out
+
+                - name: Reboot to reload environment variable (JAVA_HOME) and disable SELinux completely
+                  ansible.builtin.reboot:
+                    msg: "Reboot required. If error, please reboot manually."
+                    connect_timeout: 5
+                    reboot_timeout: 300
+                    pre_reboot_delay: 0
+                    post_reboot_delay: 30
+                    test_command: uptime
+                  when: java_home_out.stdout | length == 0 and selinux_status.stdout | lower != "disabled"
+              become: yes
+
             - name: Install ambari server and config
               block:
+                - name: Populate service facts (if ambari-server is not installed, then it will not apear)
+                  ansible.builtin.service_facts:
+
                 - name: Install ambari server
                   ansible.builtin.yum:
                     name: ambari-server
                     state: present
                   become: yes
-
-                - name: Populate service facts (if ambari-server is installed for the first time, then its status will not equal to active)
-                  ansible.builtin.service_facts:
 
                 - name: Update repo base url
                   community.general.xml:
@@ -738,7 +762,7 @@
                     state: present
                     chdir: "{{ tmp_dir.path }}"
 
-                - name: Create ambari user
+                - name: Create ambari user for locahost connection
                   community.mysql.mysql_user:
                     login_host: localhost
                     login_port: 3306
@@ -754,32 +778,49 @@
                     priv: 'ambari.*:ALL,GRANT'
                     state: present
 
-                - name: Setup ambari-server (skip create db schema)
+                - name: Create ambari user for FQDN connection
+                  community.mysql.mysql_user:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: ambari
+                    password: "{{ ambaripw }}"
+                    password_expire: never
+                    host: "{{ hdp_hostname }}"
+                    priv: 'ambari.*:ALL,GRANT'
+                    state: present
+                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
+
+                - name: Setup ambari-server
                   expect:
-                    command: ambari-server setup -j $JAVA_HOME
+                    command: ambari-server setup -j {{ java_home_out.stdout }}
                     responses:
                       "Customize user account for ambari-server daemon": "y"
                       "Ambari-server daemon is configured to run under user": "y"
                       "Enter user account for ambari-server daemon": "ambari"
                       "Enable Ambari Server to download and install GPL Licensed LZO packages": "n"
-                      "Enter advanced database configuration": "n"
-#                      "Enter choice": "3"
-#                      "Hostname": "locahost"
-#                      "Port": "3306"
-#                      "Database name": "ambari"
-#                      "Username": "ambari"
-#                      "Enter Database Password": "{{ ambaripw }}"
-#                      "Re-enter password": "{{ ambaripw }}"
-#                      "Should ambari use existing default jdbc": "n"
-#                      "Enter full path to custom jdbc driver": "/usr/share/java/mysql-connector-java.jar"
-#                      "Proceed with configuring remote database connection properties": "y"
-                    timeout: 1
+                      "Enter advanced database configuration": "y"
+                      "Enter choice": "3"
+                      "Hostname": "locahost"
+                      "Port": "3306"
+                      "Database name": "ambari"
+                      "Username": "ambari"
+                      "Enter Database Password": "{{ ambaripw }}"
+                      "Re-enter password": "{{ ambaripw }}"
+                      "Should ambari use existing default jdbc": "n"
+                      "Enter full path to custom jdbc driver": "/usr/share/java/mysql-connector-java.jar"
+                      "Proceed with configuring remote database connection properties": "y"
+                    timeout: 300
                   register: setup_ambari_server
-                  failed_when: "'ERROR' in setup_ambari_server.stdout_lines"
-                  when: ansible_facts.services['ambari-server.service'].status != 'active'
+                  failed_when: "'fail' in setup_ambari_server.stdout_lines"
+                  when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
-                - name: Config ambari server (run 2 times)
+                - name: Config ambari server
                   ansible.builtin.shell:
                     cmd: |
                       ambari-server setup -j $JAVA_HOME \
@@ -788,18 +829,14 @@
                         --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
                         --enable-lzo-under-gpl-license
                     chdir: "{{ tmp_dir.path }}"
-                  loop:
-                    - first
-                    - second
-                  when: ansible_facts.services['ambari-server.service'].status != 'active'
+                  when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
-                - name: Create ambari database schema
+                - name: Create ambari database schema (Required, ambari-server setup command does not take create structure affect)
                   ansible.builtin.shell:
                     cmd: mysql -uambari -p"{{ ambaripw }}" ambari < /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql
                     chdir: "{{ tmp_dir.path }}"
-                  when: ansible_facts.services['ambari-server.service'].status != 'active'
-                  become: yes
+                  when: "'ambari-server.service' not in ansible_facts.services"
 
                 - name: Update ambari-server config
                   ansible.builtin.lineinfile:
@@ -883,6 +920,57 @@
                     state: started
                     enabled: yes
                   become: yes
+#              tags:
+#                - never
+
+            - name: Create hive metastore
+              block:
+                - name: Create hive database
+                  community.mysql.mysql_db:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: hive
+                    encoding: utf8
+                    state: present
+                    chdir: "{{ tmp_dir.path }}"
+
+                - name: Create hive user for localhost connection
+                  community.mysql.mysql_user:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: hive
+                    password: "{{ hivepw }}"
+                    password_expire: never
+                    host: 'localhost'
+                    priv: 'hive.*:ALL,GRANT'
+                    state: present
+
+                - name: Create hive user for FQDN connection
+                  community.mysql.mysql_user:
+                    login_host: localhost
+                    login_port: 3306
+                    check_hostname: false
+                    connect_timeout: 5
+                    config_file: ""
+                    login_user: root
+                    login_password: "{{ mysqldb_rootpw }}"
+                    name: hive
+                    password: "{{ hivepw }}"
+                    password_expire: never
+                    host: "{{ hdp_hostname }}"
+                    priv: 'hive.*:ALL,GRANT'
+                    state: present
+                  when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
 #              tags:
 #                - never
 
