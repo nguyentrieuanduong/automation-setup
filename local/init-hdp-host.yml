@@ -10,6 +10,8 @@
 # pip install ansible pexpect PyMySQL lxml
 # ansible-galaxy collection install community.mysql  # Collection community.general is needed but current create error
 # ansible-playbook local/init-hdp-host.yml -e ansible_python_interpreter=$(which python) -e "yum_upgrade=no install_sdk=no" -e '{"hdp_hostname":"hdp-host.internal.cloudapp.net"}'
+# curl -u admin:admin -H  X-Requested-By:ambari http://localhost:8080/api/v1/hosts
+# curl -u admin:admin -H  X-Requested-By:ambari http://localhost:8080/api/v1/blueprints/securityBP -d @blueprint-1node-security.json
 - name: Standalone init HDP host playbook
   vars:
     - target_hosts: localhost
@@ -796,7 +798,7 @@
                     state: present
                   when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
 
-                - name: Setup ambari-server
+                - name: Setup ambari-server (Required to change config file internally)
                   expect:
                     command: ambari-server setup -j {{ java_home_out.stdout }}
                     responses:
@@ -822,19 +824,19 @@
                   when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
-#                - name: *Not necessary* Config ambari server
-#                  ansible.builtin.shell:
-#                    cmd: |
-#                      ambari-server setup -j $JAVA_HOME \
-#                        --database=mysql --databasehost=localhost --databaseport=3306 \
-#                        --databasename=ambari --databaseusername=ambari --databasepassword="{{ ambaripw }}" \
-#                        --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
-#                        --enable-lzo-under-gpl-license
-#                    chdir: "{{ tmp_dir.path }}"
-#                  when: "'ambari-server.service' not in ansible_facts.services"
-#                  become: yes
+                - name: Config ambari server (Required to apply the database driver config)
+                  ansible.builtin.shell:
+                    cmd: |
+                      ambari-server setup -j $JAVA_HOME \
+                        --database=mysql --databasehost=localhost --databaseport=3306 \
+                        --databasename=ambari --databaseusername=ambari --databasepassword="{{ ambaripw }}" \
+                        --jdbc-db=mysql --jdbc-driver=/usr/share/java/mysql-connector-java.jar \
+                        --enable-lzo-under-gpl-license
+                    chdir: "{{ tmp_dir.path }}"
+                  when: "'ambari-server.service' not in ansible_facts.services"
+                  become: yes
 
-                - name: Create ambari database schema (Required, ambari-server setup command does not take create structure affect)
+                - name: Create ambari database schema (Required, ambari-server setup command does not create database structure)
                   ansible.builtin.shell:
                     cmd: mysql -uambari -p"{{ ambaripw }}" ambari < /var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql
                     chdir: "{{ tmp_dir.path }}"
