@@ -796,7 +796,7 @@
                     state: present
                   when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
 
-                - name: Setup ambari-server (need to run a few times)
+                - name: Setup ambari-server
                   expect:
                     command: ambari-server setup -j {{ java_home_out.stdout }}
                     responses:
@@ -819,7 +819,6 @@
                     timeout: 300
                   register: setup_ambari_server
                   failed_when: "'fail' in setup_ambari_server.stdout_lines"
-#                   loop: "{{ range(0, 5, 1)|list }}"
                   when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
