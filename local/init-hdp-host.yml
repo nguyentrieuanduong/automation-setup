@@ -5,7 +5,7 @@
 # #wget -O "HDP-UTILS-1.1.0.22-centos7.tar.gz" "http://host.domain/download/HDP-UTILS-1.1.0.22-centos7.tar.gz"
 # #wget -O "HDP-GPL-3.1.4.0-centos7-gpl.tar.gz" "HDP-GPL-3.1.4.0-centos7-gpl.tar.gz"
 # sudo yum install -y python3
-# mkdir ~/tmp; cd ~/tmp; python3 -m venv .venv; source .venv/bin/activate
+# mkdir ~/tmp; cd ~/tmp; mkdir local; python3 -m venv .venv; source .venv/bin/activate
 # pip install -U pip setuptools wheel
 # pip install ansible pexpect PyMySQL lxml
 # ansible-galaxy collection install community.mysql  # Collection community.general is needed but current create error
@@ -617,6 +617,7 @@
                           "Disallow root login remotely": "y"
                           "Remove test database and access to it": "y"
                           "Reload privilege tables now": "y"
+                        echo: true
                         timeout: 300
                       register: secure_mysqldb
                       failed_when: "'... Failed!' in secure_mysqldb.stdout_lines"
@@ -762,7 +763,7 @@
                     state: present
                     chdir: "{{ tmp_dir.path }}"
 
-                - name: Create ambari user for locahost connection
+                - name: Create ambari user for localhost connection
                   community.mysql.mysql_user:
                     login_host: localhost
                     login_port: 3306
@@ -795,7 +796,7 @@
                     state: present
                   when: hdp_hostname | length > 0 and hdp_hostname != "localhost" and hdp_hostname != "localhost.localdomain"
 
-                - name: Setup ambari-server (need to run 2 times)
+                - name: Setup ambari-server (need to run a few times)
                   expect:
                     command: ambari-server setup -j {{ java_home_out.stdout }}
                     responses:
@@ -805,7 +806,7 @@
                       "Enable Ambari Server to download and install GPL Licensed LZO packages": "n"
                       "Enter advanced database configuration": "y"
                       "Enter choice": "3"
-                      "Hostname": "locahost"
+                      "Hostname": "localhost"
                       "Port": "3306"
                       "Database name": "ambari"
                       "Username": "ambari"
@@ -814,12 +815,11 @@
                       "Should ambari use existing default jdbc": "n"
                       "Enter full path to custom jdbc driver": "/usr/share/java/mysql-connector-java.jar"
                       "Proceed with configuring remote database connection properties": "y"
+                    echo: true
                     timeout: 300
                   register: setup_ambari_server
                   failed_when: "'fail' in setup_ambari_server.stdout_lines"
-                  loop:
-                    - first
-                    - second
+#                   loop: "{{ range(0, 5, 1)|list }}"
                   when: "'ambari-server.service' not in ansible_facts.services"
                   become: yes
 
