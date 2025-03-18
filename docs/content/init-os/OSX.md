@@ -54,6 +54,12 @@ brew analytics off
     brew install --cask iterm2
     ```
 
+- Install watch from [procps](https://gitlab.com/procps-ng/procps):
+
+    ```shell
+    brew install watch
+    ```
+
 - Install [Python build dependencies](https://devguide.python.org/getting-started/setup-building/#macos):
 
     ```shell
@@ -189,6 +195,12 @@ brew analytics off
     brew install helm
     ```
 
+- Install [yq](https://mikefarah.gitbook.io/yq):
+
+    ```shell
+    brew install yq
+    ```
+
 ---
 
 ### Other installations
@@ -238,7 +250,7 @@ brew analytics off
 
 - [OneDrive](https://apps.apple.com/vn/app/onedrive/id823766827)
 
-- [Microsoft Remote Desktop](https://apps.apple.com/vn/app/microsoft-remote-desktop/id1295203466)
+- [Windows App (Previously Microsoft Remote Desktop)](https://apps.apple.com/vn/app/windows-app/id1295203466)
 
 - [Jump Desktop](https://apps.apple.com/vn/app/jump-desktop-rdp-vnc-fluid/id524141863)
 
