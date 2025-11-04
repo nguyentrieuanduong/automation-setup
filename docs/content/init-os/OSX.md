@@ -4,6 +4,10 @@
 
 ### Common
 
+###### Install OSX:
+
+https://support.apple.com/vi-vn/102662#terminal
+
 ###### Set hostname:
 
 ```shell
@@ -38,6 +42,12 @@ Install Homebrew
 
 ```shell
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Add Homebew to PATH (Show in `Next step` of output log after install Homebrew):
+
+```shell
+eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
 Disable Homebrew analytics
@@ -199,6 +209,18 @@ brew analytics off
 
     ```shell
     brew install yq
+    ```
+
+- Install [jq](https://jqlang.org/):
+
+    ```shell
+    brew install jq
+    ```
+
+- Install [postgresql](https://www.postgresql.org/download/macosx/) for development:
+
+    ```shell
+    brew install postgresql
     ```
 
 ---
