@@ -228,6 +228,14 @@ brew analytics off
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     ```
 
+    Set environment variables if needed:
+
+    ```shell
+    echo 'export RUSTUP_HOME="/Users/apollo/.rustup"' >> ~/.zshrc
+    echo 'export CARGO_HOME="/Users/apollo/.cargo"' >> ~/.zshrc
+    echo 'export PATH=$PATH:/Users/apollo/.cargo/bin' >> ~/.zshrc
+    ```
+
 ###### pyvenv based
 
 - Install [JupyterLab](https://jupyterlab.readthedocs.io/en/latest/getting_started/installation.html#pip):
