@@ -87,20 +87,32 @@ brew analytics off
 
     Install specific JDK version:
 
-    - Open JDK 11:
+    - Open JDK 17:
 
         ```shell
-        brew install openjdk@11
+        brew install openjdk@17
         ```
 
         ```shell
-        brew info openjdk@11
+        brew info openjdk@17
         ```
 
-        If not linked, create link for installed JDK 11:
+        For the system Java wrappers to find this JDK, symlink it with:
 
         ```shell
-        sudo ln -sfn /opt/homebrew/opt/openjdk@11/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-11.jdk
+        sudo ln -sfn /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-17.jdk
+        ```
+
+        Add JDK to PATH:
+
+        ```shell
+        echo 'export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH"' >> ~/.zshrc
+        ```
+
+        For compilers to find openjdk@17 you may need to set:
+
+        ```shell
+        echo 'export CPPFLAGS="-I/opt/homebrew/opt/openjdk@17/include:$CPPFLAGS"' >> ~/.zshrc
         ```
     
     Find the Java home:
@@ -109,18 +121,11 @@ brew analytics off
     /usr/libexec/java_home -V
     ```
 
-    Or find the Java home with specific version:
-
-    ```shell
-    /usr/libexec/java_home -v11
-    ```
-
     Set the JAVA_HOME environment variable:
 
     ```shell
-    JAVA_HOME=$(/usr/libexec/java_home -V)
-    echo 'export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home"' >> ~/.zprofile
-    echo 'export PATH=$PATH:$JAVA_HOME/bin' >> ~/.zprofile
+    echo 'export JAVA_HOME="/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home"' >> ~/.zshrc
+    #echo 'export PATH=$PATH:$JAVA_HOME/bin' >> ~/.zshrc
     ```
 
 - Install [Coursier](https://get-coursier.io/) and [Scala](https://www.scala-lang.org/):
@@ -167,18 +172,6 @@ brew analytics off
 
     ```shell
     brew install node
-    ```
-
-- Install [Intellij](https://www.jetbrains.com/idea/):
-
-    ```shell
-    brew install --cask intellij-idea-ce
-    ```
-
-- Install [PyCharm](https://www.jetbrains.com/pycharm/):
-
-    ```shell
-    brew install --cask pycharm-ce
     ```
 
 - Install [Dbeaver](https://dbeaver.io/):
@@ -303,6 +296,8 @@ brew analytics off
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
 - [VSCode](https://code.visualstudio.com/download)
+
+- [JetBrains Toolbox App](https://www.jetbrains.com/toolbox-app/)
 
 - [Parallels Desktop](https://www.parallels.com/products/desktop/)
 
