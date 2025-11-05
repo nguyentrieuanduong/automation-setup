@@ -301,7 +301,7 @@ brew analytics off
 
 - [FileZilla](https://filezilla-project.org/download.php?platform=osx)
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (https://docs.docker.com/desktop/setup/install/mac-install/)
 
 - [Python](https://www.python.org/downloads/macos/)
 
