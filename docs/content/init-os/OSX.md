@@ -295,6 +295,8 @@ brew analytics off
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
+- [Python](https://www.python.org/downloads/macos/)
+
 - [VSCode](https://code.visualstudio.com/download)
 
 - [JetBrains Toolbox App](https://www.jetbrains.com/toolbox-app/)
