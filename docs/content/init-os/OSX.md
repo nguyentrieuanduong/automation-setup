@@ -143,14 +143,39 @@ brew analytics off
         cs install scala:2.12.18 && cs install scalac:2.12.18
         ```
 
-- Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://www.anaconda.com/):
+- Install [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/main) or [Anaconda](https://www.anaconda.com/):
 
     ```shell
     brew install --cask miniconda
     #brew install --cask anaconda
     ```
 
-    Create an environment named `myenv` with python 3.12 and containing the package 'sqlite':
+    Initiate conda:
+
+    ```shell
+    conda init --all
+    ```
+
+    Disable auto activate `base` environment:
+
+    ```shell
+    conda config --set auto_activate_base false
+    ```
+
+    Add conda to path, example with miniconda
+
+    ```shell
+    export PATH=$PATH:/opt/homebrew/Caskroom/miniconda/base/bin/
+    ```
+
+    Create a local environment
+
+    ```shell
+    cd my-project
+    conda create --prefix ./envs python=3.12
+    ```
+
+    Or create an environment named `myenv` with python 3.12 and containing the package 'sqlite':
 
     ```shell
     conda create -n myenv python=3.12 sqlite
@@ -160,12 +185,6 @@ brew analytics off
 
     ```shell
     conda remove -n myenv --all
-    ```
-
-    Disable auto activate `base` environment:
-
-    ```shell
-    conda config --set auto_activate_base false
     ```
 
 - Install [NodeJS](https://nodejs.org/):
