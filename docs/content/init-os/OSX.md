@@ -181,6 +181,12 @@ brew analytics off
     conda create -n myenv python=3.12 sqlite
     ```
 
+    Remove environment itself:
+
+    ```shell
+    conda env remove --prefix ./envs
+    ```
+
     Remove all packages from environment `myenv` and the environment itself:
 
     ```shell
