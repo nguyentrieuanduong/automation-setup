@@ -241,6 +241,12 @@ brew analytics off
     brew install postgresql
     ```
 
+- Install [MySQL and mysqlclient](https://github.com/PyMySQL/mysqlclient#macos-homebrew) for development:
+
+    ```shell
+    brew install mysql pkg-config
+    ```
+
 ---
 
 ### Other installations
