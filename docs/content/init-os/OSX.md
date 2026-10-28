@@ -193,10 +193,18 @@ brew analytics off
     conda remove -n myenv --all
     ```
 
-- Install [NodeJS](https://nodejs.org/):
+- Install [NodeJS](https://nodejs.org/) via [Fast Node Manager](https://github.com/Schniz/fnm):
 
     ```shell
-    brew install node
+    # brew install node
+    brew install fnm
+
+    fnm install
+
+    # printf '\neval "$(fnm env --use-on-cd --shell zsh)"\n' >> ~/.zshrc
+
+    # Example NodeJS24
+    # fnm install 24 && fnm default 24
     ```
 
 - Install [Dbeaver](https://dbeaver.io/):
