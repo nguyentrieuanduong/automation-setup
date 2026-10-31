@@ -82,6 +82,12 @@ brew analytics off
     brew install watch
     ```
 
+- Install [git-filter-repo](https://github.com/newren/git-filter-repo):
+
+    ```shell
+    brew install git-filter-repo
+    ```
+
 - Install [Python build dependencies](https://devguide.python.org/getting-started/setup-building/#macos):
 
     ```shell
