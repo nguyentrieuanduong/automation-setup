@@ -64,6 +64,18 @@ brew analytics off
     brew install --cask iterm2
     ```
 
+- Install [GNU Core Utilities](https://www.gnu.org/software/coreutils/):
+
+    ```shell
+    brew install coreutils
+    ```
+
+- Install [ripgrep](https://github.com/BurntSushi/ripgrep):
+
+    ```shell
+    brew install ripgrep
+    ```
+
 - Install watch from [procps](https://gitlab.com/procps-ng/procps):
 
     ```shell
